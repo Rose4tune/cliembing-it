@@ -3,6 +3,8 @@ import tseslint from "typescript-eslint";
 import react from "eslint-plugin-react";
 import hooks from "eslint-plugin-react-hooks";
 import unused from "eslint-plugin-unused-imports";
+import testingLibrary from "eslint-plugin-testing-library";
+import jestDom from "eslint-plugin-jest-dom";
 
 export default [
   js.configs.recommended,
@@ -18,7 +20,13 @@ export default [
       },
     },
     files: ["**/*.{ts,tsx,js,jsx}"],
-    plugins: { react, "react-hooks": hooks, "unused-imports": unused },
+    plugins: {
+      react,
+      "react-hooks": hooks,
+      "unused-imports": unused,
+      "testing-library": testingLibrary,
+      "jest-dom": jestDom,
+    },
     settings: { react: { version: "19" } },
     rules: {
       "@typescript-eslint/no-unused-vars": [
@@ -26,6 +34,26 @@ export default [
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/no-explicit-any": "warn",
+    },
+  },
+  {
+    files: ["**/*.{test,spec}.{ts,tsx,js,jsx}"],
+    languageOptions: {
+      globals: {
+        vi: "readonly",
+        describe: "readonly",
+        test: "readonly",
+        it: "readonly",
+        expect: "readonly",
+        beforeEach: "readonly",
+        afterEach: "readonly",
+        beforeAll: "readonly",
+        afterAll: "readonly",
+      },
+    },
+    rules: {
+      ...testingLibrary.configs.react.rules,
+      ...jestDom.configs.recommended.rules,
     },
   },
   {
