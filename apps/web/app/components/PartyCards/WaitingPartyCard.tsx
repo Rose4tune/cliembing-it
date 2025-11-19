@@ -19,17 +19,21 @@ export function WaitingPartyCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="h-5 w-5" />
-          현재 대기중인 파티
+        <CardTitle className="flex items-center2 justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            현재 대기중인 파티
+          </div>
+          <p className="font-semibold text-lg">{partyName}</p>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div>
-          <p className="font-semibold text-lg">{partyName}</p>
-          <p className="text-sm text-muted-foreground mt-1">{teamName}</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {date} {startTime} 시작
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <p>{teamName}</p>
+          <p className="text-right">
+            {date}
+            <br />
+            {startTime} 시작
           </p>
         </div>
         <p className="text-xs text-muted-foreground">
