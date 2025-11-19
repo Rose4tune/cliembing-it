@@ -11,7 +11,7 @@ export function GamePreviewCard() {
         <CardTitle>게임 미리보기</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="aspect-video bg-gradient-to-br from-primary/20 to-secondary/20 rounded-lg flex items-center justify-center">
+        <div className="aspect-video bg-linear-to-br from-primary/20 to-secondary/20 rounded-lg flex items-center justify-center">
           <div className="text-center space-y-2">
             <div className="text-4xl">🎮</div>
             <p className="text-sm text-muted-foreground">게임 미리보기</p>
@@ -24,7 +24,7 @@ export function GamePreviewCard() {
       </CardContent>
       <CardFooter>
         <Button asChild variant="primary" className="w-full">
-          <Link href="/game/preview">게임 체험하기</Link>
+          <Link href="/game">게임 체험하기</Link>
         </Button>
       </CardFooter>
     </Card>
