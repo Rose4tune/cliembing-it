@@ -67,11 +67,13 @@
   --color-background: oklch(var(--background));
   --color-foreground: oklch(var(--foreground));
 
-  --color-border: oklch(var(--border));
+  --color-border: lightpink;
+  /* --color-border: oklch(var(--border)); */
   --color-input: oklch(var(--input));
   --color-ring: oklch(var(--ring));
 
-  --color-primary: oklch(var(--primary));
+  --color-primary: hotpink;
+  /* --color-primary: oklch(var(--primary)); */
   --color-primary-foreground: oklch(var(--primary-foreground));
 
   --color-secondary: oklch(var(--secondary));

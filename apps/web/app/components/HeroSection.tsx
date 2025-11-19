@@ -1,7 +1,7 @@
 export function HeroSection() {
   return (
     <div className="flex flex-col items-center space-y-6 text-center py-8">
-      <div className="relative w-32 h-32 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-secondary/20 border-4 border-primary/10">
+      <div className="relative w-32 h-32 rounded-full overflow-hidden bg-linear-to-br from-primary/20 to-secondary/20 border-4 border-primary/10">
         <div className="w-full h-full flex items-center justify-center">
           <span className="text-6xl">🧗</span>
         </div>

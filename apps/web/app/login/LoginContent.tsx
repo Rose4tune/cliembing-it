@@ -30,7 +30,7 @@ export default function LoginContent() {
       <main className="flex-1 container max-w-md mx-auto px-4 py-8 space-y-8 pb-24">
         {/* Logo Section */}
         <div className="flex flex-col items-center space-y-4 text-center pt-8">
-          <div className="relative w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-secondary/20 border-4 border-primary/10 flex items-center justify-center">
+          <div className="relative w-24 h-24 rounded-full overflow-hidden bg-linear-to-br from-primary/20 to-secondary/20 border-4 border-primary/10 flex items-center justify-center">
             <span className="text-5xl">🏔️</span>
           </div>
           <h2 className="text-2xl font-bold">CLIMBING</h2>
