@@ -2,16 +2,15 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@pkg/ui-web";
-import { ArrowLeft, Sparkles, Users, Trophy } from "lucide-react";
+import { Sparkles, Users, Trophy } from "lucide-react";
 import { FooterNavigation } from "../components/FooterNavigation";
-import { HeroSection } from "../components/HeroSection";
+import { Header } from "../components/Header";
 
 export default function LoginContent() {
   const [isLoading, setIsLoading] = useState(false);
   const searchParams = useSearchParams();
-  const router = useRouter();
   const error = searchParams.get("error");
 
   const handleKakaoLogin = async () => {
@@ -26,16 +25,7 @@ export default function LoginContent() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-        <div className="flex h-16 items-center justify-between px-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Go back">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-lg font-semibold">로그인</h1>
-          <div className="w-9" /> {/* Spacer for centering */}
-        </div>
-      </header>
+      <Header variant="login" title="로그인" />
 
       <main className="flex-1 container max-w-md mx-auto px-4 py-8 space-y-8 pb-24">
         {/* Logo Section */}
