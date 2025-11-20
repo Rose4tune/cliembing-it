@@ -1,16 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Button,
-  Input,
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@pkg/ui-web";
+import { Button, Input, Card, CardHeader, CardTitle, CardContent, CardFooter } from "@pkg/ui-web";
 
 interface JoinPartyCardProps {
   onJoin?: (name: string) => void;
@@ -31,11 +22,10 @@ export function JoinPartyCard({ onJoin, defaultName = "" }: JoinPartyCardProps) 
     <Card>
       <CardHeader>
         <CardTitle>파티 참가하기</CardTitle>
-        <CardDescription>파티에 참가하려면 이름을 입력해주세요</CardDescription>
       </CardHeader>
       <CardContent>
         <Input
-          placeholder="이름을 입력하세요"
+          placeholder="초대 코드를 입력하세요"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {

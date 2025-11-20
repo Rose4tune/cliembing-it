@@ -1,17 +1,14 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Home, GamepadIcon, User, LayoutDashboard } from "lucide-react";
+import { Home, CircleGauge, PlusCircle, Gamepad } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
 
 type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  requiresAuth?: boolean;
-  activeLabel?: string;
 };
 
 const navItems: NavItem[] = [
@@ -21,56 +18,29 @@ const navItems: NavItem[] = [
     icon: Home,
   },
   {
-    href: "/game",
-    label: "게임",
-    icon: GamepadIcon,
-    activeLabel: "대시보드",
-  },
-  {
     href: "/rankboard",
-    label: "대시보드",
-    icon: LayoutDashboard,
-    requiresAuth: true,
+    label: "랭킹보드",
+    icon: CircleGauge,
   },
   {
-    href: "/profile",
-    label: "프로필",
-    icon: User,
-    requiresAuth: true,
+    href: "/rankboard/score-input",
+    label: "점수입력",
+    icon: PlusCircle,
+  },
+  {
+    href: "/rankboard/tetris",
+    label: "테트리스",
+    icon: Gamepad,
   },
 ];
 
-export function FooterNavigation() {
+export function DashboardFooterNavigation() {
   const pathname = usePathname();
-  const { data: session } = useSession();
-
-  const isPartyActive = false;
-
-  const visibleItems = navItems.filter((item) => {
-    if (isPartyActive && item.href === "/profile") {
-      return false;
-    }
-    if (item.requiresAuth && !session) {
-      return false;
-    }
-    return true;
-  });
-
-  const displayItems = visibleItems.map((item) => {
-    if (isPartyActive && item.href === "/game" && item.activeLabel) {
-      return {
-        ...item,
-        label: item.activeLabel,
-        href: "/dashboard",
-      };
-    }
-    return item;
-  });
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
       <div className="container mx-auto flex items-center justify-around px-4">
-        {displayItems.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
 

@@ -47,7 +47,7 @@ export const OnDashboardPage: Story = {
   parameters: {
     nextjs: {
       navigation: {
-        pathname: "/dashboard",
+        pathname: "/rankboard",
       },
     },
   },

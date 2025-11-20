@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { Header } from "../components/Header";
 import { FooterNavigation } from "../components/FooterNavigation";
 import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@pkg/ui-web";
@@ -24,6 +24,36 @@ export default function ProfilePage() {
   const [name, setName] = useState("김클라임");
   const [email, setEmail] = useState("climb@example.com");
   const [phone, setPhone] = useState("010-1234-5678");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut({ callbackUrl: "/" });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm("정말로 회원 탈퇴하시겠습니까?\n모든 데이터가 삭제되며 복구할 수 없습니다.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch("/api/auth/delete-account", {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("회원 탈퇴 실패");
+      }
+
+      alert("회원 탈퇴가 완료되었습니다.");
+      await signOut({ callbackUrl: "/" });
+    } catch (error) {
+      console.error("회원 탈퇴 에러:", error);
+      alert("회원 탈퇴 중 오류가 발생했습니다. 다시 시도해주세요.");
+      setIsDeleting(false);
+    }
+  };
 
   const handleSave = () => {
     // TODO: API 호출로 저장
@@ -156,6 +186,13 @@ export default function ProfilePage() {
                     </div>
                     <p className="text-sm text-muted-foreground">{email}</p>
                     <p className="text-sm text-muted-foreground">{phone}</p>
+
+                    <Button onClick={handleSignOut} variant="secondary" className="w-full">
+                      로그아웃
+                    </Button>
+                    <Button onClick={handleDeleteAccount} variant="destructive" className="w-full">
+                      회원 탈퇴
+                    </Button>
                   </>
                 )}
               </div>
