@@ -209,7 +209,7 @@ export default function DashboardPage() {
               <p className="text-gray-400 text-right">Total score</p>
               <div className="space-y-2">
                 {teamRankings.map((item) => (
-                  <Card key={item.rank} className="p-3">
+                  <Card key={item.rank} className="p-4">
                     <CardContent>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 flex-1">
@@ -235,7 +235,7 @@ export default function DashboardPage() {
               <p className="text-gray-400 text-right">Taken Time</p>
               <div className="space-y-2">
                 {challengeStatus.map((item) => (
-                  <Card key={item.rank} className="p-3">
+                  <Card key={item.rank} className="p-4">
                     <CardContent>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 flex-1">
