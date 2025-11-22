@@ -127,9 +127,7 @@ export function LevelScoreCounter({
           >
             <Minus className="h-4 w-4" />
           </Button>
-          <div className="min-w-[2rem] text-center text-sm font-semibold text-gray-400">
-            {score}
-          </div>
+          <div className="text-center text-sm font-semibold text-gray-400">{score}</div>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -179,10 +177,7 @@ export function LevelScoreCounter({
         >
           <Minus className="h-4 w-4" />
         </Button>
-        <div
-          className="min-w-[2rem] text-center text-sm font-semibold"
-          style={{ color: textColor }}
-        >
+        <div className="text-center text-sm font-semibold" style={{ color: textColor }}>
           {score}
         </div>
         <Button
