@@ -1,6 +1,17 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { TetrisBoard } from "./TetrisBoard";
 
+type BlockColor =
+  | "blue"
+  | "red"
+  | "green"
+  | "purple"
+  | "orange"
+  | "pink"
+  | "yellow"
+  | "special"
+  | null;
+
 const meta: Meta<typeof TetrisBoard> = {
   title: "Components/Tetris/TetrisBoard",
   component: TetrisBoard,
@@ -10,16 +21,16 @@ const meta: Meta<typeof TetrisBoard> = {
 export default meta;
 type Story = StoryObj<typeof TetrisBoard>;
 
-const emptyBoard = Array(20)
+const emptyBoard: BlockColor[][] = Array(20)
   .fill(null)
   .map(() => Array(10).fill(null));
 
-const boardWithBlocks = Array(20)
+const boardWithBlocks: BlockColor[][] = Array(20)
   .fill(null)
   .map((_, rowIndex) =>
     Array(10)
       .fill(null)
-      .map((_, colIndex) => {
+      .map((_, colIndex): BlockColor => {
         // 아래쪽 일부 블록 표시
         if (rowIndex >= 15) {
           const colors: Array<"blue" | "red" | "green" | "purple" | "orange" | "pink" | "yellow"> =
