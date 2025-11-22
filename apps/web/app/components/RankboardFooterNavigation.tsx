@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Home, CircleGauge, PlusCircle, Gamepad } from "lucide-react";
+import { Home, LayoutDashboard, PlusCircle, Blocks } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
 
 type NavItem = {
@@ -19,8 +19,8 @@ const navItems: NavItem[] = [
   },
   {
     href: "/rankboard",
-    label: "랭킹보드",
-    icon: CircleGauge,
+    label: "대시보드",
+    icon: LayoutDashboard,
   },
   {
     href: "/rankboard/score-input",
@@ -30,11 +30,11 @@ const navItems: NavItem[] = [
   {
     href: "/rankboard/tetris",
     label: "테트리스",
-    icon: Gamepad,
+    icon: Blocks,
   },
 ];
 
-export function DashboardFooterNavigation() {
+export function RankboardFooterNavigation() {
   const pathname = usePathname();
 
   return (

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { Header } from "../components/Header";
-import { DashboardFooterNavigation } from "../components/DashboardFooterNavigation";
+import { RankboardFooterNavigation } from "../components/RankboardFooterNavigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
 import { Trophy, Clock } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
@@ -259,7 +259,7 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      <DashboardFooterNavigation />
+      <RankboardFooterNavigation />
     </div>
   );
 }
