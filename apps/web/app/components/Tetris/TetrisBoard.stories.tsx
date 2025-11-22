@@ -33,9 +33,17 @@ const boardWithBlocks: BlockColor[][] = Array(20)
       .map((_, colIndex): BlockColor => {
         // 아래쪽 일부 블록 표시
         if (rowIndex >= 15) {
-          const colors: Array<"blue" | "red" | "green" | "purple" | "orange" | "pink" | "yellow"> =
-            ["blue", "red", "green", "purple", "orange", "pink", "yellow"];
-          return colors[(colIndex + rowIndex) % colors.length];
+          const colors: BlockColor[] = [
+            "blue",
+            "red",
+            "green",
+            "purple",
+            "orange",
+            "pink",
+            "yellow",
+          ];
+          const colorIndex = (colIndex + rowIndex) % colors.length;
+          return colors[colorIndex] ?? null;
         }
         return null;
       }),
