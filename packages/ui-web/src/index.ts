@@ -11,3 +11,15 @@ export {
   CardContent,
 } from "./components/Card";
 export { Input } from "./components/Input";
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+} from "./components/Dialog";
