@@ -1,0 +1,50 @@
+"use client";
+
+import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
+import { Clock } from "lucide-react";
+
+interface TeamGameStatusCardProps {
+  teamTotalScore: number;
+  completedLines: number;
+  acquiredPieces: number;
+  timeRemaining?: string;
+}
+
+export function TeamGameStatusCard({
+  teamTotalScore,
+  completedLines,
+  acquiredPieces,
+  timeRemaining,
+}: TeamGameStatusCardProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>우리팀 게임 현황</CardTitle>
+          {timeRemaining && (
+            <div className="flex items-center gap-1 text-sm font-semibold text-destructive">
+              <Clock className="h-4 w-4" />
+              <span>{timeRemaining}</span>
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-around gap-4">
+          <div className="flex flex-col items-center">
+            <div className="text-3xl font-bold text-blue-600">{teamTotalScore}</div>
+            <div className="text-sm text-muted-foreground mt-1">팀 총점</div>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="text-3xl font-bold text-green-600">{completedLines}</div>
+            <div className="text-sm text-muted-foreground mt-1">완성 라인</div>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="text-3xl font-bold text-purple-600">{acquiredPieces}</div>
+            <div className="text-sm text-muted-foreground mt-1">획득 조각</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
