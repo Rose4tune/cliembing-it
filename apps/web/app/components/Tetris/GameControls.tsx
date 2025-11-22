@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronDown } from "lucide-r
 import { cn } from "@pkg/ui-web/lib/utils";
 
 interface GameControlsProps {
-  onMove: (direction: "left" | "right" | "down") => void;
+  onMove: (direction: "left" | "right" | "down" | "up") => void;
   onRotate: () => void;
   onDrop: () => void;
   onConfirm?: () => void;
