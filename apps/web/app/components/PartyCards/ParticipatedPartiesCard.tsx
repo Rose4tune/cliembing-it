@@ -181,7 +181,7 @@ export function ParticipatedPartiesCard() {
                   {/* 하단: 버튼 */}
                   <div className="px-4 pb-4">
                     <Button
-                      className="w-full rounded-full bg-gradient-to-r from-primary to-primary/80 text-white font-semibold py-3"
+                      className="w-full rounded-full bg-linear-to-r from-primary to-primary/80 text-white font-semibold py-3"
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePartyClick(party);
