@@ -6,6 +6,7 @@ import { FooterNavigation } from "./components/FooterNavigation";
 import { HeroSection } from "./components/HeroSection";
 import { LoginRequiredCard } from "./components/PartyCards/LoginRequiredCard";
 import { JoinPartyCard } from "./components/PartyCards/JoinPartyCard";
+import { CreatePartyCard } from "./components/PartyCards/CreatePartyCard";
 import { WaitingPartyCard } from "./components/PartyCards/WaitingPartyCard";
 import { ActivePartyCard } from "./components/PartyCards/ActivePartyCard";
 import { FeatureCards } from "./components/PartyCards/FeatureCards";
@@ -36,6 +37,7 @@ export default function Home() {
             <LoginRequiredCard />
           ) : partyStatus === "none" ? (
             <>
+              <CreatePartyCard />
               <JoinPartyCard onJoin={handleJoinParty} />
             </>
           ) : partyStatus === "waiting" ? (
