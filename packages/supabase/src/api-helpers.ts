@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SupabaseResult } from "./utils";
+import type { SupabaseResult } from "./utils";
 
 // Re-export utils for convenience
 export { executeSupabaseQuery } from "./utils";

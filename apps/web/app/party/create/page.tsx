@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "../../components/Header";
@@ -19,7 +19,8 @@ interface PartyFormData {
   maxParticipants: number;
 }
 
-export default function CreatePartyPage() {
+// useSearchParams를 사용하는 컴포넌트를 분리
+function CreatePartyForm() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -281,5 +282,20 @@ export default function CreatePartyPage() {
 
       <FooterNavigation />
     </div>
+  );
+}
+
+// 메인 컴포넌트에서 Suspense로 감싸기
+export default function CreatePartyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col items-center justify-center">
+          <div className="text-muted-foreground">로딩 중...</div>
+        </div>
+      }
+    >
+      <CreatePartyForm />
+    </Suspense>
   );
 }

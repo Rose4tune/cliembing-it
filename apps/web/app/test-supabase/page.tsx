@@ -334,25 +334,23 @@ export default function TestSupabasePage() {
                 <summary className="cursor-pointer text-sm text-gray-600">데이터 보기</summary>
                 <div className="mt-2 space-y-2">
                   {typeof connectionTest.data === "object" &&
-                    connectionTest.data !== null &&
-                    "rlsInfo" in connectionTest.data &&
-                    connectionTest.data.rlsInfo && (
-                      <div className="p-2 bg-blue-50 rounded text-xs">
-                        <div className="font-semibold mb-1">RLS 정보:</div>
-                        <div>모드: {(connectionTest.data.rlsInfo as RlsInfo).clientType}</div>
-                        {(connectionTest.data.rlsInfo as RlsInfo).userRole && (
-                          <div>
-                            사용자 Role: {(connectionTest.data.rlsInfo as RlsInfo).userRole}
-                          </div>
-                        )}
-                        <div>데이터 개수: {(connectionTest.data.rlsInfo as RlsInfo).dataCount}</div>
-                        {(connectionTest.data.rlsInfo as RlsInfo).note && (
-                          <div className="text-gray-600 mt-1">
-                            {(connectionTest.data.rlsInfo as RlsInfo).note}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                  connectionTest.data !== null &&
+                  "rlsInfo" in connectionTest.data &&
+                  connectionTest.data.rlsInfo ? (
+                    <div className="p-2 bg-blue-50 rounded text-xs">
+                      <div className="font-semibold mb-1">RLS 정보:</div>
+                      <div>모드: {(connectionTest.data.rlsInfo as RlsInfo).clientType}</div>
+                      {(connectionTest.data.rlsInfo as RlsInfo).userRole ? (
+                        <div>사용자 Role: {(connectionTest.data.rlsInfo as RlsInfo).userRole}</div>
+                      ) : null}
+                      <div>데이터 개수: {(connectionTest.data.rlsInfo as RlsInfo).dataCount}</div>
+                      {(connectionTest.data.rlsInfo as RlsInfo).note ? (
+                        <div className="text-gray-600 mt-1">
+                          {(connectionTest.data.rlsInfo as RlsInfo).note}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <pre className="p-2 bg-gray-100 rounded text-xs overflow-auto">
                     {JSON.stringify(
                       typeof connectionTest.data === "object" &&
@@ -510,18 +508,18 @@ export default function TestSupabasePage() {
                 <summary className="cursor-pointer text-sm text-gray-600">결과 보기</summary>
                 <div className="mt-2 space-y-2">
                   {typeof queryTest.data === "object" &&
-                    queryTest.data !== null &&
-                    "rlsInfo" in queryTest.data &&
-                    queryTest.data.rlsInfo && (
-                      <div className="p-2 bg-blue-50 rounded text-xs">
-                        <div className="font-semibold mb-1">RLS 정보:</div>
-                        <div>모드: {(queryTest.data.rlsInfo as RlsInfo).clientType}</div>
-                        {(queryTest.data.rlsInfo as RlsInfo).userRole && (
-                          <div>사용자 Role: {(queryTest.data.rlsInfo as RlsInfo).userRole}</div>
-                        )}
-                        <div>데이터 개수: {(queryTest.data.rlsInfo as RlsInfo).dataCount}</div>
-                      </div>
-                    )}
+                  queryTest.data !== null &&
+                  "rlsInfo" in queryTest.data &&
+                  queryTest.data.rlsInfo ? (
+                    <div className="p-2 bg-blue-50 rounded text-xs">
+                      <div className="font-semibold mb-1">RLS 정보:</div>
+                      <div>모드: {(queryTest.data.rlsInfo as RlsInfo).clientType}</div>
+                      {(queryTest.data.rlsInfo as RlsInfo).userRole ? (
+                        <div>사용자 Role: {(queryTest.data.rlsInfo as RlsInfo).userRole}</div>
+                      ) : null}
+                      <div>데이터 개수: {(queryTest.data.rlsInfo as RlsInfo).dataCount}</div>
+                    </div>
+                  ) : null}
                   <pre className="p-2 bg-gray-100 rounded text-xs overflow-auto">
                     {JSON.stringify(
                       typeof queryTest.data === "object" &&
