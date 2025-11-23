@@ -142,8 +142,8 @@ export function ParticipatedPartiesCard() {
 
             const isAccessible = isPartyAccessible(party);
 
-            // 접근 가능한 파티는 새로운 디자인 적용
-            if (isAccessible) {
+            // 일반 모드이고 접근 가능한 파티는 새로운 디자인 적용
+            if (!isAdminView && isAccessible) {
               // 파티 이름에서 vol. 추출 (예: "vol.4 테트리스" 또는 "테트리스")
               const partyNameMatch = party.name.match(/vol\.(\d+)\s*(.+)/i);
               const volNumber = partyNameMatch ? partyNameMatch[1] : null;
@@ -194,7 +194,7 @@ export function ParticipatedPartiesCard() {
               );
             }
 
-            // 접근 불가능한 파티는 기존 디자인 유지
+            // 관리자 모드이거나 접근 불가능한 파티는 기존 디자인 유지
             return (
               <div
                 key={party.id}
