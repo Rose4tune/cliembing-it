@@ -114,8 +114,15 @@ export default function CreatePartyPage() {
         throw new Error(result.error || "파티 생성에 실패했습니다");
       }
 
-      alert("파티가 생성되었습니다!");
-      router.push("/dashboard");
+      // 파티 생성 성공 시 해당 파티의 관리자 대시보드로 이동
+      const partyId = result.data?.party?.id;
+      if (partyId) {
+        alert("파티가 생성되었습니다!");
+        router.push(`/admin/${partyId}/dashboard`);
+      } else {
+        alert("파티가 생성되었습니다!");
+        router.push("/");
+      }
     } catch (error) {
       console.error("파티 생성 실패:", error);
       alert(
