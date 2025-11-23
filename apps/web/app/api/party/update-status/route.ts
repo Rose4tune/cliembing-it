@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession, authOptions } from "@pkg/auth";
 import { createServerClient, createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
-import type { PartyStatus } from "@pkg/shared/src/party";
+import type { PartyStatus } from "@pkg/shared";
 
 /**
  * 파티 상태 업데이트 API
