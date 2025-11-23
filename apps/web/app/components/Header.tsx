@@ -6,7 +6,8 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@pkg/ui-web";
-import { Moon, Sun, ArrowLeft } from "lucide-react";
+import { Moon, Sun, ArrowLeft, User, Shield } from "lucide-react";
+import { useViewMode } from "../contexts/ViewModeContext";
 
 interface HeaderProps {
   variant?: "default" | "login" | "dashboard";
@@ -29,10 +30,39 @@ export function Header({
   const { theme, setTheme } = useTheme();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const { viewMode, changeViewMode, isAdminView } = useViewMode();
+  const [permissions, setPermissions] = useState<{
+    isAdmin?: boolean;
+    isStaff?: boolean;
+    canToggle?: boolean;
+  }>({});
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // 권한 정보 조회
+  useEffect(() => {
+    if (!session) return;
+
+    const fetchPermissions = async () => {
+      try {
+        const response = await fetch("/api/user/permissions");
+        const result = await response.json();
+        if (result.success) {
+          setPermissions({
+            isAdmin: result.data.isAdmin,
+            isStaff: result.data.isStaff,
+            canToggle: result.data.isAdmin || result.data.isStaff,
+          });
+        }
+      } catch (error) {
+        console.error("권한 조회 실패:", error);
+      }
+    };
+
+    fetchPermissions();
+  }, [session]);
 
   if (variant === "login") {
     return (
@@ -99,6 +129,31 @@ export function Header({
               aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+          )}
+
+          {/* 권한 전환 버튼 (관리자/스탭만 표시) */}
+          {session && permissions.canToggle && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                changeViewMode(isAdminView ? "user" : permissions.isAdmin ? "admin" : "staff")
+              }
+              className="text-xs"
+              title={isAdminView ? "일반 모드로 전환" : "관리자 모드로 전환"}
+            >
+              {isAdminView ? (
+                <>
+                  <User className="h-4 w-4 mr-1" />
+                  일반
+                </>
+              ) : (
+                <>
+                  <Shield className="h-4 w-4 mr-1" />
+                  {permissions.isAdmin ? "관리자" : "스탭"}
+                </>
+              )}
             </Button>
           )}
 

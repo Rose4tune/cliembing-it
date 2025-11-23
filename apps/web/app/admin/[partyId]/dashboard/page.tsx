@@ -14,16 +14,19 @@ import {
   type Party,
 } from "@pkg/shared";
 import { Calendar, Users, FileText, Code } from "lucide-react";
+import { useViewMode } from "../../../contexts/ViewModeContext";
 
 export default function AdminDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
   const partyId = params?.partyId as string;
+  const { isAdminView } = useViewMode();
 
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasAccess, setHasAccess] = useState(false);
 
   // 인증 및 권한 체크
   useEffect(() => {
@@ -32,18 +35,73 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    if (status === "authenticated" && session) {
-      const userRole = (session.user as { role?: string | null })?.role;
-      if (userRole !== "admin") {
-        alert("관리자만 접근할 수 있습니다.");
-        router.push("/");
-      }
+    if (status === "authenticated" && session && partyId) {
+      // 파티별 권한 확인
+      const checkPermissions = async () => {
+        try {
+          const response = await fetch(`/api/party/${partyId}/permissions`);
+          const result = await response.json();
+
+          console.log("권한 확인 응답:", { response: response.status, result });
+
+          if (result.success) {
+            const { isAdmin, isStaff, canAccessAdminView } = result.data;
+
+            // 관리자 모드이고 관리자 권한이 있을 때만 접근 가능
+            if (isAdminView && isAdmin) {
+              setHasAccess(true);
+              return;
+            }
+
+            // 일반 모드이거나 관리자 권한이 없으면 랭킹보드로 리다이렉트
+            // 파티 정보를 가져와서 시작 시간 확인
+            const partyResponse = await fetch(`/api/party/${partyId}`);
+            const partyResult = await partyResponse.json();
+
+            if (partyResult.success && partyResult.data) {
+              const party = partyResult.data;
+              if (party.start_at) {
+                const startTime = new Date(party.start_at).getTime();
+                const now = Date.now();
+                const oneHourBefore = startTime - 60 * 60 * 1000;
+
+                if (now >= oneHourBefore) {
+                  // 1시간 전이면 랭킹보드로 이동
+                  router.push(`/rankboard/${partyId}`);
+                } else {
+                  // 아직 1시간 전이 아니면 안내 메시지
+                  alert("파티 시작 1시간 전부터 랭킹보드에 입장할 수 있습니다");
+                  router.push("/");
+                }
+              } else {
+                alert("파티 시작 시간이 설정되지 않았습니다");
+                router.push("/");
+              }
+            } else {
+              router.push(`/rankboard/${partyId}`);
+            }
+            return;
+          } else {
+            console.error("권한 확인 실패:", result.error);
+            alert(`권한 확인 중 오류가 발생했습니다: ${result.error || "알 수 없는 오류"}`);
+            router.push("/");
+          }
+        } catch (error) {
+          console.error("권한 확인 실패:", error);
+          alert(
+            `권한 확인 중 오류가 발생했습니다: ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
+          );
+          router.push("/");
+        }
+      };
+
+      checkPermissions();
     }
-  }, [status, session, router]);
+  }, [status, session, router, partyId, isAdminView]);
 
   // 파티 정보 조회
   useEffect(() => {
-    if (!partyId || status !== "authenticated") return;
+    if (!partyId || status !== "authenticated" || !hasAccess) return;
 
     const fetchParty = async () => {
       try {
@@ -51,10 +109,13 @@ export default function AdminDashboardPage() {
         const response = await fetch(`/api/party/${partyId}`);
         const result = await response.json();
 
+        console.log("파티 정보 조회 응답:", { response: response.status, result });
+
         if (!response.ok || !result.success) {
           throw new Error(result.error || "파티 정보를 불러올 수 없습니다");
         }
 
+        // API 응답 형식: successResponse(result.data)이므로 result.data가 파티 정보
         setParty(result.data);
       } catch (err) {
         console.error("파티 조회 에러:", err);
@@ -65,7 +126,7 @@ export default function AdminDashboardPage() {
     };
 
     fetchParty();
-  }, [partyId, status]);
+  }, [partyId, status, hasAccess]);
 
   const handleStatusChange = async (newStatus: PartyStatus) => {
     if (!partyId) return;
@@ -101,7 +162,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  if (status === "loading" || loading) {
+  if (status === "loading" || loading || !hasAccess) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center">
         <div className="text-muted-foreground">로딩 중...</div>
