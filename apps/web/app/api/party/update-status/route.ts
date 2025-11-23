@@ -63,7 +63,7 @@ export async function PATCH(request: Request) {
     // 6. 파티 존재 확인
     const { data: party, error: fetchError } = await supabase
       .from("parties")
-      .select("id, status")
+      .select("id, status, end_at")
       .eq("id", partyId)
       .single();
 
