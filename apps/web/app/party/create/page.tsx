@@ -44,12 +44,21 @@ export default function CreatePartyPage() {
     }
   }, [searchParams]);
 
-  // 로그인 체크
+  // 로그인 및 관리자 권한 체크
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
+      return;
     }
-  }, [status, router]);
+
+    if (status === "authenticated" && session) {
+      const userRole = (session.user as { role?: string | null })?.role;
+      if (userRole !== "admin") {
+        alert("파티 생성은 관리자만 가능합니다.");
+        router.push("/");
+      }
+    }
+  }, [status, session, router]);
 
   const handleInputChange = (field: keyof PartyFormData, value: string | number) => {
     setFormData((prev) => ({
@@ -76,18 +85,42 @@ export default function CreatePartyPage() {
       return;
     }
 
+    // 관리자 권한 확인
+    const userRole = (session?.user as { role?: string | null })?.role;
+    if (userRole !== "admin") {
+      alert("파티 생성은 관리자만 가능합니다.");
+      return;
+    }
+
     try {
-      // TODO: Supabase API 호출하여 파티 생성
-      console.log("파티 생성 데이터:", formData);
+      const response = await fetch("/api/party/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.title,
+          description: formData.description,
+          date: formData.date,
+          time: formData.time,
+          location: formData.location,
+          maxParticipants: formData.maxParticipants,
+        }),
+      });
 
-      // 임시로 성공 메시지 표시
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "파티 생성에 실패했습니다");
+      }
+
       alert("파티가 생성되었습니다!");
-
-      // 생성 후 대시보드로 이동 (또는 파티 상세 페이지로)
       router.push("/dashboard");
     } catch (error) {
       console.error("파티 생성 실패:", error);
-      alert("파티 생성에 실패했습니다. 다시 시도해주세요.");
+      alert(
+        error instanceof Error ? error.message : "파티 생성에 실패했습니다. 다시 시도해주세요.",
+      );
     }
   };
 
