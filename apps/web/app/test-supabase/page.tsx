@@ -329,7 +329,7 @@ export default function TestSupabasePage() {
             {connectionTest.error && (
               <div className="text-red-600 text-sm mb-2">에러: {connectionTest.error}</div>
             )}
-            {connectionTest.data && (
+            {connectionTest.data !== undefined && connectionTest.data !== null && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-sm text-gray-600">데이터 보기</summary>
                 <div className="mt-2 space-y-2">
@@ -505,7 +505,7 @@ export default function TestSupabasePage() {
             {queryTest.error && (
               <div className="text-red-600 text-sm mb-2">에러: {queryTest.error}</div>
             )}
-            {queryTest.data && (
+            {queryTest.data !== undefined && queryTest.data !== null && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-sm text-gray-600">결과 보기</summary>
                 <div className="mt-2 space-y-2">
