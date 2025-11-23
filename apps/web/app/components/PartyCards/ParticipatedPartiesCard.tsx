@@ -69,7 +69,13 @@ export function ParticipatedPartiesCard() {
     }
 
     // 일반 모드일 때는 무조건 랭킹보드로 이동 (관리자 권한 여부와 관계없이)
-    // 파티 시작 시간 확인
+    // 파티 상태가 "진행중"이면 시간 체크 없이 접근 가능
+    if (party.status === "running") {
+      router.push(`/rankboard/${party.id}`);
+      return;
+    }
+
+    // 진행중이 아닌 경우 파티 시작 시간 확인
     if (!party.start_at) {
       alert("파티 시작 시간이 설정되지 않았습니다");
       return;

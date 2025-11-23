@@ -54,27 +54,36 @@ export default function AdminDashboardPage() {
             }
 
             // 일반 모드이거나 관리자 권한이 없으면 랭킹보드로 리다이렉트
-            // 파티 정보를 가져와서 시작 시간 확인
+            // 파티 정보를 가져와서 상태 및 시작 시간 확인
             const partyResponse = await fetch(`/api/party/${partyId}`);
             const partyResult = await partyResponse.json();
 
             if (partyResult.success && partyResult.data) {
               const party = partyResult.data;
-              if (party.start_at) {
-                const startTime = new Date(party.start_at).getTime();
-                const now = Date.now();
-                const oneHourBefore = startTime - 60 * 60 * 1000;
 
-                if (now >= oneHourBefore) {
-                  // 1시간 전이면 랭킹보드로 이동
-                  router.push(`/rankboard/${partyId}`);
-                } else {
-                  // 아직 1시간 전이 아니면 안내 메시지
-                  alert("파티 시작 1시간 전부터 랭킹보드에 입장할 수 있습니다");
-                  router.push("/");
-                }
-              } else {
+              // 진행중인 파티는 시간 체크 없이 랭킹보드로 이동
+              if (party.status === "running") {
+                router.push(`/rankboard/${partyId}`);
+                return;
+              }
+
+              // 진행중이 아닌 경우 파티 시작 시간 확인
+              if (!party.start_at) {
                 alert("파티 시작 시간이 설정되지 않았습니다");
+                router.push("/");
+                return;
+              }
+
+              const startTime = new Date(party.start_at).getTime();
+              const now = Date.now();
+              const oneHourBefore = startTime - 60 * 60 * 1000;
+
+              if (now >= oneHourBefore) {
+                // 1시간 전이면 랭킹보드로 이동
+                router.push(`/rankboard/${partyId}`);
+              } else {
+                // 아직 1시간 전이 아니면 안내 메시지
+                alert("파티 시작 1시간 전부터 랭킹보드에 입장할 수 있습니다");
                 router.push("/");
               }
             } else {

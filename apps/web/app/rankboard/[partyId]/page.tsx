@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
-import { Header } from "../../../components/Header";
-import { RankboardFooterNavigation } from "../../../components/RankboardFooterNavigation";
+import { Header } from "../../components/Header";
+import { RankboardFooterNavigation } from "../../components/RankboardFooterNavigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
 import { Trophy, Clock } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
@@ -68,14 +68,12 @@ export default function RankboardPage() {
           return;
         }
 
-        // 진행중이 아닌 파티는 접근 불가
-        if (party.status !== "running") {
-          alert("파티 시작 1시간 전부터 랭킹보드에 입장할 수 있습니다");
-          router.push("/");
-          return;
+        // 진행중인 파티는 시간 체크 없이 접근 가능
+        if (party.status === "running") {
+          return; // 접근 허용
         }
 
-        // 진행중인 파티도 1시간 전 체크
+        // 진행중이 아닌 파티는 1시간 전 체크
         if (!party.start_at) {
           alert("파티 시작 시간이 설정되지 않았습니다");
           router.push("/");
@@ -186,7 +184,11 @@ export default function RankboardPage() {
       <Header
         variant="dashboard"
         partyName={party.name}
-        userName={session?.user?.name || session?.user?.nickname || "사용자"}
+        userName={
+          session?.user?.name ||
+          (session?.user as { nickname?: string | null })?.nickname ||
+          "사용자"
+        }
         team="1"
         level="Purple"
       />

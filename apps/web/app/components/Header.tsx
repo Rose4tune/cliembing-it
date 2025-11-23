@@ -81,7 +81,7 @@ export function Header({
   if (variant === "dashboard") {
     return (
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-        <div className="container mx-auto px-4 py-3">
+        <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-lg text-primary font-bold">Cliembing It!</p>
