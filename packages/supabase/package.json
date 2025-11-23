@@ -3,7 +3,12 @@
   "private": true,
   "exports": {
     "./server": "./src/server.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./utils": "./src/utils.ts",
+    "./api-helpers": "./src/api-helpers.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2"
   },
   "peerDependencies": {
     "next": "^16",
