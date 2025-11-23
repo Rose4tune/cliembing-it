@@ -26,12 +26,12 @@ const navItems: NavItem[] = [
     icon: GamepadIcon,
     activeLabel: "대시보드",
   },
-  {
-    href: "/rankboard",
-    label: "대시보드",
-    icon: LayoutDashboard,
-    requiresAuth: true,
-  },
+  // {
+  //   href: "/rankboard",
+  //   label: "대시보드",
+  //   icon: LayoutDashboard,
+  //   requiresAuth: true,
+  // },
   {
     href: "/profile",
     label: "프로필",
