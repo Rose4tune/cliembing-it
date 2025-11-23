@@ -1,5 +1,9 @@
-import { createSupabaseClient, createSupabaseAdminClient } from "./supabase-client";
+import {
+  createSupabaseClient,
+  createSupabaseAdminClient,
+} from "./supabase-client";
 import { supabaseLogger } from "../logger";
+import { DEFAULT_CREW_ID } from "../constants";
 
 export interface UserData {
   name?: string | null;
@@ -32,7 +36,9 @@ export const userService = {
 
     const { data, error } = await supabase
       .from("users")
-      .select("id, provider_id, nickname, email, auth_provider, mbti, base_level, role")
+      .select(
+        "id, provider_id, nickname, email, auth_provider, mbti, base_level, role",
+      )
       .eq("provider_id", providerId)
       .single();
 
@@ -65,7 +71,7 @@ export const userService = {
 
       if (existingByKakaoId) {
         supabaseLogger.success(
-          `기존 사용자 발견 - 정보 유지: ${existingByKakaoId.id}`
+          `기존 사용자 발견 - 정보 유지: ${existingByKakaoId.id}`,
         );
         return existingByKakaoId.id;
       }
@@ -81,7 +87,7 @@ export const userService = {
 
         if (existingByEmail) {
           supabaseLogger.sync(
-            "이메일로 기존 사용자 발견, provider_id만 업데이트"
+            "이메일로 기존 사용자 발견, provider_id만 업데이트",
           );
 
           const { error: updateError } = await supabase
@@ -117,6 +123,7 @@ export const userService = {
           nickname: user.name || "카카오사용자",
           email: user.email,
           auth_provider: "kakao",
+          default_crew_id: DEFAULT_CREW_ID, // 기본 크루 "클IE밍"에 자동 할당
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -139,6 +146,22 @@ export const userService = {
         supabaseLogger.error("프로필 생성 실패", profileError);
       } else {
         supabaseLogger.success("프로필 생성 완료");
+      }
+
+      // 5. crew_members 테이블에 자동 추가 (기본 크루 "클IE밍"에 멤버로 추가)
+      const { error: crewMemberError } = await supabase
+        .from("crew_members")
+        .insert({
+          crew_id: DEFAULT_CREW_ID,
+          user_id: userId,
+          role: "member", // 기본 역할은 member
+          joined_at: new Date().toISOString(),
+        });
+
+      if (crewMemberError && crewMemberError.code !== "23505") {
+        supabaseLogger.error("크루 멤버 추가 실패", crewMemberError);
+      } else {
+        supabaseLogger.success("크루 멤버 추가 완료");
       }
 
       return userId;
@@ -176,4 +199,3 @@ export const userService = {
     }
   },
 };
-
