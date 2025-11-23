@@ -387,7 +387,7 @@ export default function RankboardPage() {
         </div>
       </main>
 
-      <RankboardFooterNavigation />
+      <RankboardFooterNavigation partyId={partyId} />
     </div>
   );
 }

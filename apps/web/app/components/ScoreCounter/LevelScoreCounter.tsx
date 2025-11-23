@@ -108,37 +108,38 @@ export function LevelScoreCounter({
   const colors = levelColorMap[level];
 
   if (disabled) {
-    return (
-      <div
-        className={cn("rounded-lg border p-4 opacity-50 grayscale", "bg-gray-50 border-gray-200")}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <p className={cn("font-semibold text-gray-400")}>{levelLabel}</p>
-            <p className={cn("text-sm text-gray-300")}>문제당 +{pointsPerProblem}점</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 justify-end">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled
-            className="h-8 w-8 rounded-full border border-gray-300 bg-white text-gray-400"
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <div className="text-center text-sm font-semibold text-gray-400">{score}</div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled
-            className="h-8 w-8 rounded-full border border-gray-300 bg-white text-gray-400"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    );
+    return;
+    // (
+    // <div
+    //   className={cn("rounded-lg border p-4 opacity-50 grayscale", "bg-gray-50 border-gray-200")}
+    // >
+    //   <div className="flex items-center justify-between mb-2">
+    //     <div>
+    //       <p className={cn("font-semibold text-gray-400")}>{levelLabel}</p>
+    //       <p className={cn("text-sm text-gray-300")}>문제당 +{pointsPerProblem}점</p>
+    //     </div>
+    //   </div>
+    //   <div className="flex items-center gap-2 justify-end">
+    //     <Button
+    //       variant="ghost"
+    //       size="icon-sm"
+    //       disabled
+    //       className="h-8 w-8 rounded-full border border-gray-300 bg-white text-gray-400"
+    //     >
+    //       <Minus className="h-4 w-4" />
+    //     </Button>
+    //     <div className="text-center text-sm font-semibold text-gray-400">{score}</div>
+    //     <Button
+    //       variant="ghost"
+    //       size="icon-sm"
+    //       disabled
+    //       className="h-8 w-8 rounded-full border border-gray-300 bg-white text-gray-400"
+    //     >
+    //       <Plus className="h-4 w-4" />
+    //     </Button>
+    //   </div>
+    // </div>
+    // );
   }
 
   const bgColor = isMine ? colors.light : colors.light + "80";
