@@ -18,10 +18,10 @@ export type PartyStatus =
  */
 export const PARTY_STATUS_LABELS: Record<PartyStatus, string> = {
   draft: "초안",
-  ready: "준비완료",
+  ready: "대기중",
   running: "진행중",
   paused: "일시정지",
-  ended: "종료",
+  ended: "완료",
   archived: "아카이브",
 };
 

@@ -238,26 +238,6 @@ export default function AdminDashboardPage() {
               </p>
 
               <div className="grid grid-cols-2 gap-2">
-                {party.status !== "draft" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleStatusChange("draft")}
-                    className="w-full"
-                  >
-                    초안으로
-                  </Button>
-                )}
-                {party.status !== "ready" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleStatusChange("ready")}
-                    className="w-full"
-                  >
-                    준비완료로
-                  </Button>
-                )}
                 {party.status !== "running" && (
                   <Button
                     variant="primary"
@@ -268,26 +248,28 @@ export default function AdminDashboardPage() {
                     시작하기
                   </Button>
                 )}
-                {party.status !== "paused" && party.status === "running" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleStatusChange("paused")}
-                    className="w-full"
-                  >
-                    일시정지
-                  </Button>
-                )}
-                {party.status !== "ended" && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleStatusChange("ended")}
-                    className="w-full"
-                  >
-                    종료하기
-                  </Button>
-                )}
+                {party.status !== "ready" &&
+                  party.status !== "ended" &&
+                  party.status === "running" && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleStatusChange("ready")}
+                        className="w-full"
+                      >
+                        진행 취소
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleStatusChange("ended")}
+                        className="w-full"
+                      >
+                        종료하기
+                      </Button>
+                    </>
+                  )}
                 {party.status === "ended" && (
                   <Button
                     variant="secondary"

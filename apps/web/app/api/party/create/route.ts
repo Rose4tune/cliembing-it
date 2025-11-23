@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { getServerSession, authOptions, DEFAULT_CREW_ID } from "@pkg/auth";
 import { createServerClient, createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
     let supabase;
     try {
       supabase = createAdminClient();
-    } catch (error) {
+    } catch {
       // Service Role Key가 없으면 일반 클라이언트 사용 (RLS 정책 적용)
       supabase = await createServerClient();
     }
@@ -92,7 +91,7 @@ export async function POST(request: Request) {
           code: partyCode,
           crew_id: DEFAULT_CREW_ID, // 기본 크루 "클IE밍"
           created_by: userId,
-          status: "draft", // 초기 상태는 "draft" (초안)
+          status: "ready", // 초기 상태는 "ready" (대기중)
           start_at: startAt,
           total_participants: maxParticipants || null,
           description: description?.trim() || null, // description 추가
@@ -103,6 +102,30 @@ export async function POST(request: Request) {
 
     if (!result.success || !result.data) {
       return errorResponse(result.error?.message || "파티 생성에 실패했습니다", 500);
+    }
+
+    const partyId = (result.data as { id: string }).id;
+
+    // 9. 파티 생성자를 party_members에 자동 추가 (role: 'admin' 또는 'leader')
+    const memberResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("party_members")
+        .insert({
+          party_id: partyId,
+          user_id: userId,
+          role: "admin", // 파티 생성자는 관리자 역할로 설정 (enum 값에 따라 조정 가능)
+          joined_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+    });
+
+    if (!memberResult.success) {
+      // 파티는 생성되었지만 멤버 추가 실패 - 경고만 로그하고 파티는 반환
+      console.warn(
+        "파티 생성자는 자동으로 추가되었지만 멤버 등록에 실패했습니다:",
+        memberResult.error,
+      );
     }
 
     return successResponse({

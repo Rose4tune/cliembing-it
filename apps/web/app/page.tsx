@@ -11,6 +11,7 @@ import { WaitingPartyCard } from "./components/PartyCards/WaitingPartyCard";
 import { ActivePartyCard } from "./components/PartyCards/ActivePartyCard";
 import { FeatureCards } from "./components/PartyCards/FeatureCards";
 import { GamePreviewCard } from "./components/PartyCards/GamePreviewCard";
+import { ParticipatedPartiesCard } from "./components/PartyCards/ParticipatedPartiesCard";
 
 type PartyStatus = "none" | "waiting" | "active";
 
@@ -35,21 +36,28 @@ export default function Home() {
             <div className="text-center text-muted-foreground">로딩 중...</div>
           ) : !session ? (
             <LoginRequiredCard />
-          ) : partyStatus === "none" ? (
-            <>
-              <CreatePartyCard />
-              <JoinPartyCard onJoin={handleJoinParty} />
-            </>
-          ) : partyStatus === "waiting" ? (
-            <WaitingPartyCard />
           ) : (
             <>
-              <ActivePartyCard />
-              <FeatureCards />
+              {/* 참여한 파티 목록 */}
+              <ParticipatedPartiesCard />
+
+              {partyStatus === "none" ? (
+                <>
+                  <CreatePartyCard />
+                  <JoinPartyCard onJoin={handleJoinParty} />
+                </>
+              ) : partyStatus === "waiting" ? (
+                <WaitingPartyCard />
+              ) : (
+                <>
+                  <ActivePartyCard />
+                  <FeatureCards />
+                </>
+              )}
+
+              <GamePreviewCard />
             </>
           )}
-
-          <GamePreviewCard />
         </div>
       </main>
 
