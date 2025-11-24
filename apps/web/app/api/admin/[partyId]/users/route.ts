@@ -197,8 +197,23 @@ export async function PATCH(
       return errorResponse("멤버 정보를 업데이트할 수 없습니다", 500);
     }
 
-    // team_id가 변경된 경우 team_members 테이블 동기화
+    // team_id가 변경된 경우 team_members 테이블 동기화 및 승인된 점수 취소
     if (teamId !== undefined && existingTeamId !== teamId) {
+      // 팀 배정이 변경되면 이전까지의 승인된 점수를 전부 취소 (approved = NULL로 변경)
+      const cancelApprovedScoresResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("level_scores")
+          .update({ approved: null })
+          .eq("party_id", partyId)
+          .eq("user_id", userId)
+          .eq("approved", true);
+      });
+
+      if (!cancelApprovedScoresResult.success) {
+        console.error("승인된 점수 취소 실패:", cancelApprovedScoresResult.error);
+        // 실패해도 계속 진행
+      }
+
       // 기존 team_members 레코드 삭제 (기존 team_id가 있는 경우)
       if (existingTeamId) {
         const deleteResult = await executeSupabaseQuery(async () => {

@@ -37,6 +37,7 @@ export default function ApprovalsPage() {
   const partyId = params?.partyId as string;
 
   const [scores, setScores] = useState<ScoreApproval[]>([]);
+  const [approvedScores, setApprovedScores] = useState<ScoreApproval[]>([]);
   const [gameRequests, setGameRequests] = useState<GameRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export default function ApprovalsPage() {
       }
 
       setScores(result.data.scores || []);
+      setApprovedScores(result.data.approvedScores || []);
       setGameRequests(result.data.gameRequests || []);
     } catch (err) {
       console.error("승인 대기 목록 조회 에러:", err);
@@ -179,6 +181,45 @@ export default function ApprovalsPage() {
                           <XCircle className="h-4 w-4 mr-1" />
                           거부
                         </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 승인 완료된 점수 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              승인 완료된 점수
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {approvedScores.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                승인 완료된 점수가 없습니다.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {approvedScores.map((score) => (
+                  <Card key={score.id} className="p-4 bg-green-50 dark:bg-green-950/20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="font-semibold flex items-center gap-2">
+                          {score.users.nickname}
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        </div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          레벨: {score.level} | 문제 수: {score.problem_count} | 점수: {score.score}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          승인 시간:{" "}
+                          {new Date(score.updated_at || score.created_at).toLocaleString("ko-KR")}
+                        </div>
                       </div>
                     </div>
                   </Card>
