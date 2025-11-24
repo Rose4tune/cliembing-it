@@ -48,7 +48,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return errorResponse("파티에 참가하지 않았습니다", 403);
     }
 
-    // 사용자의 점수 조회
+    // 사용자의 점수 조회 (승인된 점수와 전체 점수 모두)
     const result = await executeSupabaseQuery(async () => {
       return await supabase
         .from("level_scores")

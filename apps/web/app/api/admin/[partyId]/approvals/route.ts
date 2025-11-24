@@ -22,8 +22,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const { partyId } = await params;
     const supabase = createAdminClient();
 
-    // 점수 승인 대기 목록 조회
-    // TODO: level_scores에 approved 컬럼이 추가되면 해당 필드로 필터링
+    // 점수 승인 대기 목록 조회 (approved가 NULL인 것만)
     const scoresResult = await executeSupabaseQuery(async () => {
       return await supabase
         .from("level_scores")
@@ -44,6 +43,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         `,
         )
         .eq("party_id", partyId)
+        .is("approved", null)
         .order("created_at", { ascending: false });
     });
 
@@ -87,8 +87,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
 
     const supabase = createAdminClient();
 
-    // TODO: level_scores에 approved 컬럼이 추가되면 해당 필드 업데이트
-    // 현재는 임시로 성공 응답만 반환
+    // level_scores의 approved 컬럼 업데이트
+    const result = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("level_scores")
+        .update({ approved })
+        .eq("id", scoreId)
+        .eq("party_id", partyId)
+        .select()
+        .single();
+    });
+
+    if (!result.success || !result.data) {
+      return errorResponse(result.error?.message || "승인 상태 업데이트에 실패했습니다", 500);
+    }
+
     return successResponse({
       scoreId,
       approved,

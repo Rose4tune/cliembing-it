@@ -148,6 +148,23 @@ export async function PATCH(
 
     const supabase = createAdminClient();
 
+    // 기존 party_members 레코드 조회 (기존 team_id 확인용)
+    const existingMemberResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("party_members")
+        .select("user_id, team_id")
+        .eq("id", memberId)
+        .eq("party_id", partyId)
+        .single();
+    });
+
+    if (!existingMemberResult.success || !existingMemberResult.data) {
+      return errorResponse("멤버를 찾을 수 없습니다", 404);
+    }
+
+    const existingTeamId = existingMemberResult.data.team_id;
+    const userId = existingMemberResult.data.user_id;
+
     // 업데이트할 데이터 준비
     const updateData: {
       level?: string | null;
@@ -165,6 +182,7 @@ export async function PATCH(
       updateData.role = role;
     }
 
+    // party_members 업데이트
     const result = await executeSupabaseQuery(async () => {
       return await supabase
         .from("party_members")
@@ -177,6 +195,58 @@ export async function PATCH(
 
     if (!result.success) {
       return errorResponse("멤버 정보를 업데이트할 수 없습니다", 500);
+    }
+
+    // team_id가 변경된 경우 team_members 테이블 동기화
+    if (teamId !== undefined && existingTeamId !== teamId) {
+      // 기존 team_members 레코드 삭제 (기존 team_id가 있는 경우)
+      if (existingTeamId) {
+        const deleteResult = await executeSupabaseQuery(async () => {
+          return await supabase
+            .from("team_members")
+            .delete()
+            .eq("team_id", existingTeamId)
+            .eq("user_id", userId);
+        });
+
+        if (!deleteResult.success) {
+          console.error("기존 team_members 삭제 실패:", deleteResult.error);
+          // 삭제 실패해도 계속 진행 (이미 없을 수도 있음)
+        }
+      }
+
+      // 새로운 team_id가 있으면 team_members 레코드 생성
+      if (teamId) {
+        const insertResult = await executeSupabaseQuery(async () => {
+          // 기존 레코드가 있는지 확인
+          const { data: existing } = await supabase
+            .from("team_members")
+            .select("id")
+            .eq("team_id", teamId)
+            .eq("user_id", userId)
+            .single();
+
+          if (existing) {
+            // 이미 존재하면 업데이트하지 않음
+            return { data: existing, error: null };
+          }
+
+          // 없으면 생성
+          return await supabase
+            .from("team_members")
+            .insert({
+              team_id: teamId,
+              user_id: userId,
+            })
+            .select()
+            .single();
+        });
+
+        if (!insertResult.success) {
+          console.error("team_members 생성 실패:", insertResult.error);
+          // 생성 실패해도 party_members는 이미 업데이트되었으므로 계속 진행
+        }
+      }
     }
 
     return successResponse(result.data);

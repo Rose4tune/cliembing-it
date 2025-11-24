@@ -46,10 +46,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       });
     }
 
-    // 개인 랭킹이 없으면 실시간 계산
+    // 개인 랭킹이 없으면 실시간 계산 (승인된 점수만)
     if (personalRankings.length === 0) {
       const personalRankingsResult = await executeSupabaseQuery(async () => {
-        return await supabase.from("level_scores").select("user_id, score").eq("party_id", partyId);
+        return await supabase
+          .from("level_scores")
+          .select("user_id, score")
+          .eq("party_id", partyId)
+          .eq("approved", true);
       });
 
       if (personalRankingsResult.success && personalRankingsResult.data) {

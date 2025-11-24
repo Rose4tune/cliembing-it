@@ -37,11 +37,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     // 파티 멤버 정보 조회
     const result = await executeSupabaseQuery<{
       level: string | null;
-      team_number: number | null;
+      team_id: string | null;
     }>(async () => {
       return await supabase
         .from("party_members")
-        .select("level, team_number")
+        .select("level, team_id")
         .eq("party_id", partyId)
         .eq("user_id", userId)
         .single();
@@ -51,9 +51,24 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return errorResponse("파티 멤버 정보를 찾을 수 없습니다", 404);
     }
 
+    // team_id가 있으면 teams 테이블에서 팀 이름 조회
+    let teamName = null;
+    if (result.data.team_id) {
+      const { data: team } = await supabase
+        .from("teams")
+        .select("name")
+        .eq("id", result.data.team_id)
+        .single();
+
+      if (team) {
+        teamName = team.name;
+      }
+    }
+
     return successResponse({
       level: result.data.level || null,
-      team_number: result.data.team_number || null,
+      team_id: result.data.team_id || null,
+      team_name: teamName,
     });
   } catch (error) {
     console.error("멤버 정보 조회 에러:", error);

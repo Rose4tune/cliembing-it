@@ -117,6 +117,7 @@ export default function ScoreInputPage() {
   const [userTeam, setUserTeam] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [approvedTotalScore, setApprovedTotalScore] = useState(0);
 
   // 파티 정보 및 사용자 정보 조회
   useEffect(() => {
@@ -149,16 +150,27 @@ export default function ScoreInputPage() {
             black: 0,
           };
 
+          let approvedScore = 0;
           (scoresResult.data.scores || []).forEach(
-            (score: { level: ClimbingLevel; problem_count: number }) => {
+            (score: {
+              level: ClimbingLevel;
+              problem_count: number;
+              approved: boolean | null;
+              score: number;
+            }) => {
               const color = levelColorMap[score.level];
               if (color) {
                 existingScores[color] = score.problem_count;
+              }
+              // 승인된 점수만 합산
+              if (score.approved === true) {
+                approvedScore += score.score || 0;
               }
             },
           );
 
           setScores(existingScores);
+          setApprovedTotalScore(approvedScore);
         }
 
         // 사용자 파티 멤버 정보 조회 (레벨, 팀)
@@ -166,7 +178,7 @@ export default function ScoreInputPage() {
         const memberResult = await memberResponse.json();
         if (memberResponse.ok && memberResult.success) {
           setUserLevel(memberResult.data.level || "");
-          setUserTeam(memberResult.data.team_number?.toString() || "");
+          setUserTeam(memberResult.data.team_name || "");
         }
       } catch (error) {
         console.error("데이터 조회 에러:", error);
@@ -412,9 +424,15 @@ export default function ScoreInputPage() {
                     </div>
                   ))}
                 </div>
-                <div className="border-t pt-4 flex items-center justify-between">
-                  <span className="font-semibold">총 점수</span>
-                  <span className="text-xl font-bold text-primary">{totalScore}점</span>
+                <div className="border-t pt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">총 점수</span>
+                    <span className="text-xl font-bold text-primary">{totalScore}점</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">승인된 점수</span>
+                    <span className="font-semibold text-green-600">{approvedTotalScore}점</span>
+                  </div>
                 </div>
               </>
             )}

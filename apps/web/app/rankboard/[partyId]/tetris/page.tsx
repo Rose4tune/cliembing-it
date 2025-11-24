@@ -91,15 +91,19 @@ export default function TetrisPage() {
         const memberResult = await memberResponse.json();
         if (memberResponse.ok && memberResult.success) {
           setUserLevel(memberResult.data.level || "");
-          setUserTeam(memberResult.data.team_number?.toString() || "");
-        }
+          setUserTeam(memberResult.data.team_name || "");
 
-        // TODO: 팀 랭킹 조회 API (아직 구현되지 않음)
-        // const rankingsResponse = await fetch(`/api/party/${partyId}/team-rankings`);
-        // const rankingsResult = await rankingsResponse.json();
-        // if (rankingsResult.success) {
-        //   setTeamRankings(rankingsResult.data.rankings || []);
-        // }
+          // 팀 ID가 있으면 승인된 팀 점수 조회
+          if (memberResult.data.team_id) {
+            const teamScoreResponse = await fetch(
+              `/api/party/${partyId}/team-score?teamId=${memberResult.data.team_id}`,
+            );
+            const teamScoreResult = await teamScoreResponse.json();
+            if (teamScoreResponse.ok && teamScoreResult.success) {
+              setTeamTotalScore(teamScoreResult.data.teamScore || 0);
+            }
+          }
+        }
       } catch (error) {
         console.error("데이터 조회 에러:", error);
       } finally {

@@ -15,6 +15,8 @@ import { useViewMode } from "../../contexts/ViewModeContext";
 
 interface ParticipatedParty extends Party {
   participant_count: number;
+  user_team_id?: string | null;
+  user_team_name?: string | null;
 }
 
 export function ParticipatedPartiesCard() {
@@ -169,14 +171,18 @@ export function ParticipatedPartiesCard() {
                   </div>
 
                   {/* 중간: 팀 정보 박스 */}
-                  <div className="mx-4 mb-4 p-3 bg-secondary/50 rounded-lg border border-border/50">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">3조</span>
-                      <span className="px-2 py-0.5 bg-muted rounded-full text-xs text-foreground">
-                        {userName}
-                      </span>
+                  {party.user_team_name && (
+                    <div className="mx-4 mb-4 p-3 bg-secondary/50 rounded-lg border border-border/50">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">
+                          {party.user_team_name}
+                        </span>
+                        <span className="px-2 py-0.5 bg-muted rounded-full text-xs text-foreground">
+                          {userName}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* 하단: 버튼 */}
                   <div className="px-4 pb-4">

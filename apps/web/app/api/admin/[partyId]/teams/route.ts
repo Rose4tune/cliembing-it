@@ -38,15 +38,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const teamsWithMemberCount = await Promise.all(
       result.data.map(async (team: any) => {
         const memberCountResult = await executeSupabaseQuery(async () => {
-          return await supabase
+          const { count, error } = await supabase
             .from("team_members")
-            .select("id", { count: "exact", head: true })
+            .select("*", { count: "exact", head: true })
             .eq("team_id", team.id);
+
+          return { data: count, error };
         });
 
         return {
           ...team,
-          memberCount: memberCountResult.success ? (memberCountResult.data as any)?.length || 0 : 0,
+          memberCount:
+            memberCountResult.success && memberCountResult.data !== null
+              ? memberCountResult.data
+              : 0,
         };
       }),
     );
