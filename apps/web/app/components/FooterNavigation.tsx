@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Home, GamepadIcon, User, LayoutDashboard } from "lucide-react";
+import { Home, User } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
 
 type NavItem = {

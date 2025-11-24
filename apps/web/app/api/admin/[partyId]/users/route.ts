@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { getServerSession, authOptions } from "@pkg/auth";
 import { createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
@@ -72,7 +71,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const teamsMap = new Map();
     if (teamIds.length > 0) {
       const teamsResult = await executeSupabaseQuery(async () => {
-        return await supabase.from("teams").select("id, name, number").in("id", teamIds);
+        return await supabase.from("teams").select("id, name, color").in("id", teamIds);
       });
 
       if (teamsResult.success && teamsResult.data) {
@@ -99,7 +98,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         base_level: null,
         mbti: null,
       },
-      team: member.team_id ? teamsMap.get(member.team_id) || null : null,
+      team: member.team_id
+        ? (() => {
+            const team = teamsMap.get(member.team_id);
+            return team
+              ? {
+                  id: team.id,
+                  name: team.name,
+                  color: team.color,
+                }
+              : null;
+          })()
+        : null,
     }));
 
     return successResponse(membersWithUsers);
@@ -130,7 +140,7 @@ export async function PATCH(
 
     const { partyId } = await params;
     const body = await request.json();
-    const { memberId, level, teamId } = body;
+    const { memberId, level, teamId, role } = body;
 
     if (!memberId) {
       return errorResponse("멤버 ID가 필요합니다", 400);
@@ -142,6 +152,7 @@ export async function PATCH(
     const updateData: {
       level?: string | null;
       team_id?: string | null;
+      role?: string;
     } = {};
 
     if (level !== undefined) {
@@ -149,6 +160,9 @@ export async function PATCH(
     }
     if (teamId !== undefined) {
       updateData.team_id = teamId || null;
+    }
+    if (role !== undefined) {
+      updateData.role = role;
     }
 
     const result = await executeSupabaseQuery(async () => {

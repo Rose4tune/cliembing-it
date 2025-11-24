@@ -20,13 +20,15 @@ type PersonalRanking = {
 
 type TeamRanking = {
   rank: number;
-  teamNumber: number;
+  teamId: string;
+  teamName: string;
   totalScore: number;
 };
 
 type ChallengeRanking = {
   rank: number;
-  teamNumber: number;
+  teamId: string;
+  teamName: string;
   time: string;
 };
 
@@ -211,7 +213,7 @@ export default function RankingsPage() {
                 <div className="space-y-2">
                   {teamRankings.map((ranking) => (
                     <div
-                      key={ranking.teamNumber}
+                      key={ranking.teamId}
                       className="flex items-center justify-between p-4 border rounded-lg"
                     >
                       <div className="flex items-center gap-4">
@@ -228,7 +230,7 @@ export default function RankingsPage() {
                         >
                           {ranking.rank}
                         </div>
-                        <div className="font-semibold">{ranking.teamNumber}조</div>
+                        <div className="font-semibold">{ranking.teamName}</div>
                       </div>
                       <div className="text-lg font-bold">{ranking.totalScore}점</div>
                     </div>
@@ -254,7 +256,7 @@ export default function RankingsPage() {
                 <div className="space-y-2">
                   {challengeRankings.map((ranking) => (
                     <div
-                      key={ranking.teamNumber}
+                      key={ranking.teamId}
                       className="flex items-center justify-between p-4 border rounded-lg"
                     >
                       <div className="flex items-center gap-4">
@@ -271,7 +273,7 @@ export default function RankingsPage() {
                         >
                           {ranking.rank}
                         </div>
-                        <div className="font-semibold">{ranking.teamNumber}조</div>
+                        <div className="font-semibold">{ranking.teamName}</div>
                       </div>
                       <div className="text-lg font-bold">{ranking.time}</div>
                     </div>

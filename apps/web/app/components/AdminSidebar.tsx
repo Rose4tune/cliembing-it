@@ -2,7 +2,7 @@
 
 import { usePathname, useParams } from "next/navigation";
 import Link from "next/link";
-import { Settings, Users, CheckCircle, Trophy, Clock, LayoutDashboard } from "lucide-react";
+import { Settings, Users, User, CheckCircle, Trophy, Clock, Home } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
 
 type NavItem = {
@@ -25,9 +25,14 @@ export function AdminSidebar() {
       icon: Settings,
     },
     {
-      href: `/admin/${partyId}/users`,
-      label: "팀/유저 관리",
+      href: `/admin/${partyId}/teams`,
+      label: "팀 관리",
       icon: Users,
+    },
+    {
+      href: `/admin/${partyId}/users`,
+      label: "유저 관리",
+      icon: User,
     },
     {
       href: `/admin/${partyId}/approvals`,
@@ -49,6 +54,18 @@ export function AdminSidebar() {
   return (
     <nav className="fixed left-0 top-0 bottom-0 z-40 w-20 border-r bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
       <div className="flex flex-col items-center gap-2 py-4 h-full">
+        {/* 홈 버튼 */}
+        <Link
+          href="/"
+          className={cn(
+            "flex flex-col items-center gap-1 px-3 py-3 transition-colors rounded-lg w-full mb-2",
+            "text-muted-foreground hover:text-foreground hover:bg-accent",
+          )}
+          title="홈"
+        >
+          <Home className="h-5 w-5" />
+          <span className="text-xs font-medium text-center leading-tight">홈</span>
+        </Link>
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;

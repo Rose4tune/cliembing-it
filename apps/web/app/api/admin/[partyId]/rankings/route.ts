@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { getServerSession, authOptions } from "@pkg/auth";
 import { createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
@@ -22,96 +21,92 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const { partyId } = await params;
     const supabase = createAdminClient();
 
-    // 개인 랭킹 조회 (전체 점수 합계)
-    const personalRankingsResult = await executeSupabaseQuery(async () => {
+    // rankings 테이블에서 랭킹 조회 (캐시된 랭킹)
+    const rankingsResult = await executeSupabaseQuery(async () => {
       return await supabase
-        .from("level_scores")
-        .select(
-          `
-          user_id,
-          score,
-          users:user_id (
-            id,
-            nickname,
-            email
-          )
-        `,
-        )
+        .from("rankings")
+        .select("type, result, computed_at, updated_at")
         .eq("party_id", partyId);
     });
 
-    // 개인별 총점 계산
-    const personalScores: Record<string, { user: any; totalScore: number }> = {};
-    if (personalRankingsResult.success && personalRankingsResult.data) {
-      personalRankingsResult.data.forEach((item: any) => {
-        const userId = item.user_id;
-        if (!personalScores[userId]) {
-          personalScores[userId] = {
-            user: item.users,
-            totalScore: 0,
-          };
+    // rankings 테이블에 데이터가 있으면 사용, 없으면 실시간 계산
+    let personalRankings: any[] = [];
+    let teamRankings: any[] = [];
+    let challengeRankings: any[] = [];
+
+    if (rankingsResult.success && rankingsResult.data) {
+      rankingsResult.data.forEach((ranking: any) => {
+        if (ranking.type === "personal") {
+          personalRankings = ranking.result || [];
+        } else if (ranking.type === "team") {
+          teamRankings = ranking.result || [];
+        } else if (ranking.type === "challenge") {
+          challengeRankings = ranking.result || [];
         }
-        personalScores[userId].totalScore += item.score || 0;
       });
     }
 
-    const personalRankings = Object.values(personalScores)
-      .map((item) => ({
-        user: item.user,
-        totalScore: item.totalScore,
-      }))
-      .sort((a, b) => b.totalScore - a.totalScore)
-      .map((item, index) => ({
-        ...item,
-        rank: index + 1,
-      }));
+    // 개인 랭킹이 없으면 실시간 계산
+    if (personalRankings.length === 0) {
+      const personalRankingsResult = await executeSupabaseQuery(async () => {
+        return await supabase.from("level_scores").select("user_id, score").eq("party_id", partyId);
+      });
 
-    // 팀 랭킹 조회
-    const teamRankingsResult = await executeSupabaseQuery(async () => {
-      return await supabase
-        .from("party_members")
-        .select(
-          `
-          team_number,
-          user_id,
-          level_scores:user_id (
-            score
-          )
-        `,
-        )
-        .eq("party_id", partyId)
-        .not("team_number", "is", null);
-    });
+      if (personalRankingsResult.success && personalRankingsResult.data) {
+        const userIds = [...new Set(personalRankingsResult.data.map((item: any) => item.user_id))];
 
-    // 팀별 총점 계산
-    const teamScores: Record<number, number> = {};
-    if (teamRankingsResult.success && teamRankingsResult.data) {
-      teamRankingsResult.data.forEach((item: any) => {
-        const teamNumber = item.team_number;
-        if (!teamScores[teamNumber]) {
-          teamScores[teamNumber] = 0;
-        }
-        if (item.level_scores && Array.isArray(item.level_scores)) {
-          item.level_scores.forEach((score: any) => {
-            teamScores[teamNumber] += score.score || 0;
+        if (userIds.length > 0) {
+          const usersResult = await executeSupabaseQuery(async () => {
+            return await supabase.from("users").select("id, nickname, email").in("id", userIds);
           });
+
+          const usersMap = new Map();
+          if (usersResult.success && usersResult.data) {
+            usersResult.data.forEach((user: any) => {
+              usersMap.set(user.id, user);
+            });
+          }
+
+          const personalScores: Record<string, number> = {};
+          personalRankingsResult.data.forEach((item: any) => {
+            const userId = item.user_id;
+            personalScores[userId] = (personalScores[userId] || 0) + (item.score || 0);
+          });
+
+          personalRankings = Object.entries(personalScores)
+            .map(([userId, totalScore]) => ({
+              user: usersMap.get(userId) || { id: userId, nickname: "알 수 없음", email: null },
+              totalScore,
+            }))
+            .sort((a, b) => b.totalScore - a.totalScore)
+            .map((item, index) => ({
+              ...item,
+              rank: index + 1,
+            }));
         }
-      });
+      }
     }
 
-    const teamRankings = Object.entries(teamScores)
-      .map(([teamNumber, totalScore]) => ({
-        teamNumber: parseInt(teamNumber),
-        totalScore,
-      }))
-      .sort((a, b) => b.totalScore - a.totalScore)
-      .map((item, index) => ({
-        ...item,
-        rank: index + 1,
-      }));
+    // 팀 랭킹이 없으면 실시간 계산
+    if (teamRankings.length === 0) {
+      const teamsResult = await executeSupabaseQuery(async () => {
+        return await supabase.from("teams").select("id, name, score").eq("party_id", partyId);
+      });
 
-    // 챌린지 랭킹 (임시로 빈 배열)
-    const challengeRankings: any[] = [];
+      if (teamsResult.success && teamsResult.data) {
+        teamRankings = teamsResult.data
+          .map((team: any) => ({
+            teamId: team.id,
+            teamName: team.name,
+            totalScore: team.score || 0,
+          }))
+          .sort((a, b) => b.totalScore - a.totalScore)
+          .map((item, index) => ({
+            ...item,
+            rank: index + 1,
+          }));
+      }
+    }
 
     return successResponse({
       personal: personalRankings,

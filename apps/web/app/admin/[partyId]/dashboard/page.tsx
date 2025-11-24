@@ -15,7 +15,6 @@ import {
 } from "@pkg/shared";
 import { Calendar, Users, FileText, Code } from "lucide-react";
 import { useViewMode } from "../../../contexts/ViewModeContext";
-import { cn } from "@pkg/ui-web/lib/utils";
 
 export default function AdminDashboardPage() {
   const { data: session, status } = useSession();
@@ -46,7 +45,7 @@ export default function AdminDashboardPage() {
           console.log("권한 확인 응답:", { response: response.status, result });
 
           if (result.success) {
-            const { isAdmin, isStaff, canAccessAdminView } = result.data;
+            const { isAdmin } = result.data;
 
             // 관리자 모드이고 관리자 권한이 있을 때만 접근 가능
             if (isAdminView && isAdmin) {
@@ -188,7 +187,7 @@ export default function AdminDashboardPage() {
     return (
       <div className="flex min-h-screen flex-col ml-20">
         <Header variant="login" title="파티 대시보드" />
-        <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
+        <main className="flex-1 px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center text-red-600">{error}</div>
@@ -206,7 +205,7 @@ export default function AdminDashboardPage() {
     return (
       <div className="flex min-h-screen flex-col ml-20">
         <Header variant="login" title="파티 대시보드" />
-        <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
+        <main className="flex-1 px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">파티를 찾을 수 없습니다.</div>
@@ -228,7 +227,7 @@ export default function AdminDashboardPage() {
     <div className="flex min-h-screen flex-col ml-20">
       <Header variant="login" title="파티 관리 대시보드" />
 
-      <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
+      <main className="flex-1 px-4 py-8 space-y-6 pb-6">
         {/* 파티 정보 카드 */}
         <Card>
           <CardHeader>

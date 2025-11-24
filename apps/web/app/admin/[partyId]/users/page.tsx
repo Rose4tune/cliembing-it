@@ -7,10 +7,8 @@ import { Header } from "../../../components/Header";
 import { AdminSidebar } from "../../../components/AdminSidebar";
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
-import { Input } from "@pkg/ui-web";
-import { Users, User, Settings } from "lucide-react";
+import { User, Edit } from "lucide-react";
 import { ALL_LEVELS, LEVEL_LABELS, type ClimbingLevel } from "@pkg/shared";
-import { cn } from "@pkg/ui-web/lib/utils";
 
 type PartyMember = {
   id: string;
@@ -32,7 +30,7 @@ type PartyMember = {
   team?: {
     id: string;
     name: string;
-    number: number | null;
+    color: string | null;
   } | null;
 };
 
@@ -45,12 +43,11 @@ export default function UsersManagementPage() {
   const [members, setMembers] = useState<PartyMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingMember, setEditingMember] = useState<string | null>(null);
+  const [editingMember, setEditingMember] = useState<PartyMember | null>(null);
   const [editLevel, setEditLevel] = useState<ClimbingLevel | null>(null);
   const [editTeamId, setEditTeamId] = useState<string | null>(null);
-  const [teams, setTeams] = useState<Array<{ id: string; name: string; number: number | null }>>(
-    [],
-  );
+  const [editRole, setEditRole] = useState<string>("participant");
+  const [teams, setTeams] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -97,12 +94,15 @@ export default function UsersManagementPage() {
   };
 
   const handleEdit = (member: PartyMember) => {
-    setEditingMember(member.id);
+    setEditingMember(member);
     setEditLevel(member.level);
     setEditTeamId(member.team_id);
+    setEditRole(member.role);
   };
 
-  const handleSave = async (memberId: string) => {
+  const handleSave = async () => {
+    if (!editingMember) return;
+
     try {
       const response = await fetch(`/api/admin/${partyId}/users`, {
         method: "PATCH",
@@ -110,9 +110,10 @@ export default function UsersManagementPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          memberId,
+          memberId: editingMember.id,
           level: editLevel,
           teamId: editTeamId,
+          role: editRole,
         }),
       });
 
@@ -123,6 +124,9 @@ export default function UsersManagementPage() {
       }
 
       setEditingMember(null);
+      setEditLevel(null);
+      setEditTeamId(null);
+      setEditRole("participant");
       fetchMembers();
       alert("멤버 정보가 업데이트되었습니다.");
     } catch (err) {
@@ -135,30 +139,8 @@ export default function UsersManagementPage() {
     setEditingMember(null);
     setEditLevel(null);
     setEditTeamId(null);
+    setEditRole("participant");
   };
-
-  // 팀별로 그룹화
-  const membersByTeam = members.reduce(
-    (acc, member) => {
-      const teamId = member.team_id || "unassigned";
-      if (!acc[teamId]) {
-        acc[teamId] = [];
-      }
-      acc[teamId].push(member);
-      return acc;
-    },
-    {} as Record<string, PartyMember[]>,
-  );
-
-  const teamIds = Object.keys(membersByTeam).sort((a, b) => {
-    if (a === "unassigned") return 1;
-    if (b === "unassigned") return -1;
-    const teamA = teams.find((t) => t.id === a);
-    const teamB = teams.find((t) => t.id === b);
-    const numA = teamA?.number ?? 999;
-    const numB = teamB?.number ?? 999;
-    return numA - numB;
-  });
 
   if (status === "loading" || loading) {
     return (
@@ -193,149 +175,156 @@ export default function UsersManagementPage() {
 
   return (
     <div className="flex min-h-screen flex-col ml-20">
-      <Header variant="login" title="팀/유저 관리" />
+      <Header variant="login" title="유저 관리" />
 
-      <main className="flex-1 container max-w-4xl mx-auto px-4 py-8 space-y-6 pb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              파티 멤버 관리
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {teamIds.length === 0 ? (
+      <div className="flex flex-1">
+        <main className="flex-1 px-4 py-8 space-y-6 pb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                파티 멤버 관리
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {members.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
                   등록된 멤버가 없습니다.
                 </div>
               ) : (
-                teamIds.map((teamId) => {
-                  const team = teamId === "unassigned" ? null : teams.find((t) => t.id === teamId);
-                  const teamName =
-                    teamId === "unassigned"
-                      ? "팀 미배정"
-                      : team
-                        ? team.number
-                          ? `${team.number}조`
-                          : team.name || "팀"
-                        : "알 수 없음";
-
-                  return (
-                    <div key={teamId} className="space-y-2">
-                      <h3 className="text-lg font-semibold flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        {teamName}
-                      </h3>
-                      <div className="grid gap-4">
-                        {membersByTeam[teamId].map((member) => (
-                          <Card key={member.id} className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="font-semibold">{member.users.nickname}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {member.users.email}
-                                </div>
-                                {editingMember === member.id ? (
-                                  <div className="mt-4 space-y-3">
-                                    <div>
-                                      <label className="text-sm font-medium">레벨</label>
-                                      <div className="grid grid-cols-5 gap-2 mt-2">
-                                        {ALL_LEVELS.map((lvl) => (
-                                          <Button
-                                            key={lvl}
-                                            variant={editLevel === lvl ? "primary" : "outline"}
-                                            size="sm"
-                                            onClick={() => setEditLevel(lvl)}
-                                            className="text-xs"
-                                          >
-                                            {LEVEL_LABELS[lvl]}
-                                          </Button>
-                                        ))}
-                                        <Button
-                                          variant={editLevel === null ? "primary" : "outline"}
-                                          size="sm"
-                                          onClick={() => setEditLevel(null)}
-                                          className="text-xs"
-                                        >
-                                          미설정
-                                        </Button>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <label className="text-sm font-medium">팀</label>
-                                      <select
-                                        value={editTeamId || ""}
-                                        onChange={(e) => setEditTeamId(e.target.value || null)}
-                                        className="mt-2 w-full px-3 py-2 border rounded-md"
-                                      >
-                                        <option value="">팀 미배정</option>
-                                        {teams.map((team) => (
-                                          <option key={team.id} value={team.id}>
-                                            {team.number ? `${team.number}조` : team.name || "팀"}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                    <div className="flex gap-2">
-                                      <Button
-                                        variant="primary"
-                                        size="sm"
-                                        onClick={() => handleSave(member.id)}
-                                      >
-                                        저장
-                                      </Button>
-                                      <Button variant="outline" size="sm" onClick={handleCancel}>
-                                        취소
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="mt-2 space-y-1">
-                                    <div className="text-sm">
-                                      레벨:{" "}
-                                      <span className="font-medium">
-                                        {member.level ? LEVEL_LABELS[member.level] : "미설정"}
-                                      </span>
-                                    </div>
-                                    <div className="text-sm">
-                                      팀:{" "}
-                                      <span className="font-medium">
-                                        {member.team
-                                          ? member.team.number
-                                            ? `${member.team.number}조`
-                                            : member.team.name || "팀"
-                                          : "미배정"}
-                                      </span>
-                                    </div>
-                                    <div className="text-sm">
-                                      역할: <span className="font-medium">{member.role}</span>
-                                    </div>
-                                  </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-semibold">닉네임</th>
+                        <th className="text-left p-3 font-semibold">레벨</th>
+                        <th className="text-left p-3 font-semibold">팀</th>
+                        <th className="text-left p-3 font-semibold">역할</th>
+                        <th className="text-center p-3 font-semibold">작업</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {members.map((member) => (
+                        <tr key={member.id} className="border-b hover:bg-muted/50">
+                          <td className="p-3 font-semibold">{member.users.nickname}</td>
+                          <td className="p-3">
+                            {member.level ? LEVEL_LABELS[member.level] : "미설정"}
+                          </td>
+                          <td className="p-3">
+                            {member.team ? (
+                              <div className="flex items-center gap-2">
+                                {member.team.color && (
+                                  <div
+                                    className="w-4 h-4 rounded border"
+                                    style={{ backgroundColor: member.team.color }}
+                                  />
                                 )}
+                                <span>{member.team.name}</span>
                               </div>
-                              {editingMember !== member.id && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleEdit(member)}
-                                >
-                                  <Settings className="h-4 w-4 mr-1" />
-                                  수정
-                                </Button>
-                              )}
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })
+                            ) : (
+                              "미배정"
+                            )}
+                          </td>
+                          <td className="p-3">{member.role}</td>
+                          <td className="p-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(member)}
+                              disabled={editingMember?.id === member.id}
+                            >
+                              <Edit className="h-4 w-4 mr-1" />
+                              수정
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
-      </main>
+            </CardContent>
+          </Card>
+        </main>
+
+        {/* 오른쪽 사이드 카드 (수정 폼) */}
+        {editingMember && (
+          <div className="w-80 border-l bg-background p-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>유저 정보 수정</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">닉네임</label>
+                  <div className="mt-2 p-2 bg-muted rounded-md text-sm">
+                    {editingMember.users.nickname}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">레벨</label>
+                  <div className="grid grid-cols-5 gap-2 mt-2">
+                    {ALL_LEVELS.map((lvl) => (
+                      <Button
+                        key={lvl}
+                        variant={editLevel === lvl ? "primary" : "outline"}
+                        size="sm"
+                        onClick={() => setEditLevel(lvl)}
+                        className="text-xs"
+                      >
+                        {LEVEL_LABELS[lvl]}
+                      </Button>
+                    ))}
+                    <Button
+                      variant={editLevel === null ? "primary" : "outline"}
+                      size="sm"
+                      onClick={() => setEditLevel(null)}
+                      className="text-xs"
+                    >
+                      미설정
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">팀</label>
+                  <select
+                    value={editTeamId || ""}
+                    onChange={(e) => setEditTeamId(e.target.value || null)}
+                    className="mt-2 w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="">팀 미배정</option>
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">역할</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                    className="mt-2 w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="participant">참가자</option>
+                    <option value="staff">스탭</option>
+                    <option value="admin">관리자</option>
+                  </select>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button variant="primary" onClick={handleSave} className="flex-1">
+                    저장
+                  </Button>
+                  <Button variant="outline" onClick={handleCancel} className="flex-1">
+                    취소
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
 
       <AdminSidebar />
     </div>
