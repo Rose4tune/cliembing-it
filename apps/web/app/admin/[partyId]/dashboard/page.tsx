@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { Header } from "../../../components/Header";
 import { AdminSidebar } from "../../../components/AdminSidebar";
-import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
 import {
   PARTY_STATUS_LABELS,
@@ -225,15 +225,16 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="flex min-h-screen flex-col ml-20">
+      <AdminSidebar />
       <Header variant="login" title="파티 관리 대시보드" />
 
-      <main className="flex-1 px-4 py-8 space-y-6 pb-6">
+      <main className="px-4 py-8 space-y-6">
         {/* 파티 정보 카드 */}
-        <Card>
+        <Card className="max-w-[600px]">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>{party.name}</CardTitle>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColor}`}>
+              <span className={`px-3 py-1 rounded-full text-md font-semibold ${statusColor}`}>
                 {statusLabel}
               </span>
             </div>
@@ -294,76 +295,52 @@ export default function AdminDashboardPage() {
               </div>
             )}
           </CardContent>
+          <CardFooter className="block space-y-2 max-w-[300px] mt-8">
+            <div className="text-md font-semibold text-foreground mb-2">파티 상태 관리</div>
+
+            {party.status !== "running" && (
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => handleStatusChange("running")}
+                className="w-full"
+              >
+                시작하기
+              </Button>
+            )}
+            {party.status !== "ready" && party.status !== "ended" && party.status === "running" && (
+              <>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => handleStatusChange("ready")}
+                  className="w-full"
+                >
+                  진행 취소
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  onClick={() => handleStatusChange("ended")}
+                  className="w-full"
+                >
+                  종료하기
+                </Button>
+              </>
+            )}
+            {party.status === "ended" && (
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => handleStatusChange("archived")}
+                className="w-full"
+              >
+                아카이브
+              </Button>
+            )}
+          </CardFooter>
         </Card>
-
-        {/* 상태 변경 카드 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>파티 상태 관리</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-600 mb-4">
-                현재 상태: <span className="font-semibold">{statusLabel}</span>
-              </p>
-
-              <div className="grid grid-cols-2 gap-2">
-                {party.status !== "running" && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => handleStatusChange("running")}
-                    className="w-full"
-                  >
-                    시작하기
-                  </Button>
-                )}
-                {party.status !== "ready" &&
-                  party.status !== "ended" &&
-                  party.status === "running" && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleStatusChange("ready")}
-                        className="w-full"
-                      >
-                        진행 취소
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleStatusChange("ended")}
-                        className="w-full"
-                      >
-                        종료하기
-                      </Button>
-                    </>
-                  )}
-                {party.status === "ended" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleStatusChange("archived")}
-                    className="w-full"
-                  >
-                    아카이브
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 액션 버튼 */}
-        <div className="space-y-2">
-          <Button variant="secondary" className="w-full" onClick={() => router.push("/")}>
-            홈으로 돌아가기
-          </Button>
-        </div>
       </main>
-
-      <AdminSidebar />
     </div>
   );
 }
