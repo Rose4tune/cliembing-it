@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { Header } from "../../../components/Header";
-import { FooterNavigation } from "../../../components/FooterNavigation";
+import { AdminSidebar } from "../../../components/AdminSidebar";
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@pkg/shared";
 import { Calendar, Users, FileText, Code } from "lucide-react";
 import { useViewMode } from "../../../contexts/ViewModeContext";
+import { cn } from "@pkg/ui-web/lib/utils";
 
 export default function AdminDashboardPage() {
   const { data: session, status } = useSession();
@@ -185,9 +186,9 @@ export default function AdminDashboardPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-screen flex-col ml-20">
         <Header variant="login" title="파티 대시보드" />
-        <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-24">
+        <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center text-red-600">{error}</div>
@@ -203,9 +204,9 @@ export default function AdminDashboardPage() {
 
   if (!party) {
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-screen flex-col ml-20">
         <Header variant="login" title="파티 대시보드" />
-        <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-24">
+        <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">파티를 찾을 수 없습니다.</div>
@@ -224,10 +225,10 @@ export default function AdminDashboardPage() {
   const statusLabel = PARTY_STATUS_LABELS[party.status as PartyStatus] || party.status;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col ml-20">
       <Header variant="login" title="파티 관리 대시보드" />
 
-      <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-24">
+      <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
         {/* 파티 정보 카드 */}
         <Card>
           <CardHeader>
@@ -363,7 +364,7 @@ export default function AdminDashboardPage() {
         </div>
       </main>
 
-      <FooterNavigation />
+      <AdminSidebar />
     </div>
   );
 }
