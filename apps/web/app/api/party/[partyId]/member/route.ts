@@ -35,7 +35,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     }
 
     // 파티 멤버 정보 조회
-    const result = await executeSupabaseQuery(async () => {
+    const result = await executeSupabaseQuery<{
+      level: string | null;
+      team_number: number | null;
+    }>(async () => {
       return await supabase
         .from("party_members")
         .select("level, team_number")

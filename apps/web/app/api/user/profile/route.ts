@@ -34,7 +34,14 @@ export async function GET() {
     }
 
     // 사용자 정보 조회
-    const result = await executeSupabaseQuery(async () => {
+    const result = await executeSupabaseQuery<{
+      id: string;
+      nickname: string | null;
+      email: string | null;
+      base_level: number | null;
+      mbti: string | null;
+      created_at: string;
+    }>(async () => {
       return await supabase
         .from("users")
         .select("id, nickname, email, base_level, mbti, created_at")
@@ -157,7 +164,14 @@ export async function PATCH(request: Request) {
     }
 
     // 사용자 정보 업데이트
-    const result = await executeSupabaseQuery(async () => {
+    const result = await executeSupabaseQuery<{
+      id: string;
+      nickname: string | null;
+      email: string | null;
+      base_level: number | null;
+      mbti: string | null;
+      created_at: string;
+    }>(async () => {
       return await supabase.from("users").update(updateData).eq("id", userId).select().single();
     });
 

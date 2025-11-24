@@ -42,7 +42,7 @@ export function LevelInputDialog({ open, onOpenChange, onConfirm }: LevelInputDi
           {ENABLED_LEVELS.map((level) => (
             <Button
               key={level}
-              variant={selectedLevel === level ? "default" : "outline"}
+              variant={selectedLevel === level ? "primary" : "outline"}
               onClick={() => setSelectedLevel(level)}
               className="w-full"
             >
