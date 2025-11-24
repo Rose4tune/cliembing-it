@@ -20,12 +20,12 @@ const navItems: NavItem[] = [
     label: "홈",
     icon: Home,
   },
-  {
-    href: "/game",
-    label: "게임",
-    icon: GamepadIcon,
-    activeLabel: "대시보드",
-  },
+  // {
+  //   href: "/game",
+  //   label: "게임",
+  //   icon: GamepadIcon,
+  //   activeLabel: "대시보드",
+  // },
   // {
   //   href: "/rankboard",
   //   label: "대시보드",
