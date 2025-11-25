@@ -214,10 +214,10 @@ export default function TetrisPage() {
   };
 
   // 게임 시작 확인 (스탭이 확인한 경우)
-  const handleGameStartConfirmed = () => {
+  const handleGameStartConfirmed = useCallback(() => {
     setGameState("confirmed");
     setShowStartDialog(true);
-  };
+  }, []);
 
   // 게임 시작
   const handleStartGame = async () => {
@@ -296,15 +296,14 @@ export default function TetrisPage() {
     setCurrentPiece(null);
   }, [currentPiece, gameState, isSpecialBlock]);
 
-  // 게임 종료 체크
-  useEffect(() => {
-    if (gameState === "playing" && remainingPieces.length === 0 && !currentPiece) {
-      handleFinishGame();
-    }
-  }, [gameState, remainingPieces, currentPiece]);
+  // 게임 점수 계산 (임시)
+  const calculateGameScore = useCallback((): number => {
+    // TODO: 실제 점수 계산 로직 구현
+    return 0;
+  }, []);
 
   // 게임 종료 처리
-  const handleFinishGame = async () => {
+  const handleFinishGame = useCallback(async () => {
     if (!partyId || !teamId) return;
 
     try {
@@ -334,13 +333,14 @@ export default function TetrisPage() {
     } catch (error) {
       console.error("게임 종료 처리 에러:", error);
     }
-  };
+  }, [partyId, teamId, board, completedLines, calculateGameScore]);
 
-  // 게임 점수 계산 (임시)
-  const calculateGameScore = (): number => {
-    // TODO: 실제 점수 계산 로직 구현
-    return 0;
-  };
+  // 게임 종료 체크
+  useEffect(() => {
+    if (gameState === "playing" && remainingPieces.length === 0 && !currentPiece) {
+      handleFinishGame();
+    }
+  }, [gameState, remainingPieces, currentPiece, handleFinishGame]);
 
   // 스탭 확인 시뮬레이션 (실제로는 API에서 받아옴)
   useEffect(() => {
@@ -351,7 +351,26 @@ export default function TetrisPage() {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [gameState]);
+  }, [gameState, handleGameStartConfirmed]);
+
+  // 팀 랭킹 조회
+  useEffect(() => {
+    if (!partyId) return;
+
+    const fetchRankings = async () => {
+      try {
+        const response = await fetch(`/api/party/${partyId}/rankings`);
+        const result = await response.json();
+        if (response.ok && result.success && result.data?.team) {
+          setTeamRankings(result.data.team || []);
+        }
+      } catch (error) {
+        console.error("팀 랭킹 조회 에러:", error);
+      }
+    };
+
+    fetchRankings();
+  }, [partyId]);
 
   if (loading) {
     return (
@@ -379,25 +398,6 @@ export default function TetrisPage() {
       </div>
     );
   }
-
-  // 팀 랭킹 조회
-  useEffect(() => {
-    if (!partyId) return;
-
-    const fetchRankings = async () => {
-      try {
-        const response = await fetch(`/api/party/${partyId}/rankings`);
-        const result = await response.json();
-        if (response.ok && result.success && result.data?.team) {
-          setTeamRankings(result.data.team || []);
-        }
-      } catch (error) {
-        console.error("팀 랭킹 조회 에러:", error);
-      }
-    };
-
-    fetchRankings();
-  }, [partyId]);
 
   return (
     <div className="flex min-h-screen flex-col">
