@@ -102,8 +102,8 @@ async function updateRankings(supabase: SupabaseClient, partyId: string) {
       }
     }
 
-    // rankings 테이블에 저장 또는 업데이트
-    const upsertResult = await executeSupabaseQuery(async () => {
+    // 개인 랭킹을 rankings 테이블에 저장 또는 업데이트
+    const personalUpsertResult = await executeSupabaseQuery(async () => {
       return await supabase
         .from("rankings")
         .upsert(
@@ -122,8 +122,94 @@ async function updateRankings(supabase: SupabaseClient, partyId: string) {
         .single();
     });
 
-    if (!upsertResult.success) {
-      console.error("랭킹 저장 실패:", upsertResult.error);
+    if (!personalUpsertResult.success) {
+      console.error("개인 랭킹 저장 실패:", personalUpsertResult.error);
+    }
+
+    // 팀 점수 계산 및 업데이트
+    // 1. 각 팀의 멤버들의 승인된 점수 합산
+    const teamScoresResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("level_scores")
+        .select("user_id, score")
+        .eq("party_id", partyId)
+        .eq("approved", true);
+    });
+
+    if (teamScoresResult.success && teamScoresResult.data) {
+      // party_members에서 팀 정보 가져오기
+      const allMembersResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("party_members")
+          .select("user_id, team_id")
+          .eq("party_id", partyId)
+          .not("team_id", "is", null);
+      });
+
+      if (allMembersResult.success && allMembersResult.data) {
+        // 팀별 점수 합산
+        const teamScores: Record<string, number> = {};
+        teamScoresResult.data.forEach((score: any) => {
+          const member = allMembersResult.data.find((m: any) => m.user_id === score.user_id);
+          if (member && member.team_id) {
+            teamScores[member.team_id] = (teamScores[member.team_id] || 0) + (score.score || 0);
+          }
+        });
+
+        // teams 테이블의 score 업데이트
+        for (const [teamId, totalScore] of Object.entries(teamScores)) {
+          await executeSupabaseQuery(async () => {
+            return await supabase
+              .from("teams")
+              .update({ score: totalScore })
+              .eq("id", teamId)
+              .eq("party_id", partyId);
+          });
+        }
+
+        // 팀 랭킹 계산
+        const teamsResult = await executeSupabaseQuery(async () => {
+          return await supabase.from("teams").select("id, name, score").eq("party_id", partyId);
+        });
+
+        if (teamsResult.success && teamsResult.data) {
+          const teamRankings = teamsResult.data
+            .map((team: any) => ({
+              teamId: team.id,
+              teamName: team.name,
+              totalScore: team.score || 0,
+            }))
+            .sort((a, b) => b.totalScore - a.totalScore)
+            .map((item, index) => ({
+              ...item,
+              rank: index + 1,
+            }));
+
+          // 팀 랭킹을 rankings 테이블에 저장 또는 업데이트
+          const teamUpsertResult = await executeSupabaseQuery(async () => {
+            return await supabase
+              .from("rankings")
+              .upsert(
+                {
+                  party_id: partyId,
+                  type: "team",
+                  result: teamRankings,
+                  computed_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                },
+                {
+                  onConflict: "party_id,type",
+                },
+              )
+              .select()
+              .single();
+          });
+
+          if (!teamUpsertResult.success) {
+            console.error("팀 랭킹 저장 실패:", teamUpsertResult.error);
+          }
+        }
+      }
     }
   } catch (error) {
     console.error("랭킹 업데이트 에러:", error);
@@ -246,7 +332,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     const result = await executeSupabaseQuery(async () => {
       return await supabase
         .from("level_scores")
-        .update({ approved })
+        .update({
+          approved,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", scoreId)
         .eq("party_id", partyId)
         .select()

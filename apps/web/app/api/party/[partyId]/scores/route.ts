@@ -139,13 +139,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
 
     let result;
     if (existing) {
-      // 업데이트
+      // 업데이트: 점수가 변경되면 승인 상태를 NULL로 리셋 (다시 승인 필요)
       result = await executeSupabaseQuery(async () => {
         return await supabase
           .from("level_scores")
           .update({
             problem_count: problemCount,
             score,
+            approved: null, // 점수 변경 시 승인 상태 초기화
             updated_at: new Date().toISOString(),
           })
           .eq("id", existing.id)
@@ -153,7 +154,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           .single();
       });
     } else {
-      // 생성
+      // 생성: 새 점수는 승인 대기 상태로 저장
       result = await executeSupabaseQuery(async () => {
         return await supabase
           .from("level_scores")
@@ -163,6 +164,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
             level,
             problem_count: problemCount,
             score,
+            approved: null, // 승인 대기 상태
           })
           .select()
           .single();
