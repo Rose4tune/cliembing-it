@@ -164,7 +164,7 @@ export default function AdminDashboardPage() {
 
       // 파티 정보 다시 조회
       setParty(result.data.party);
-      alert("파티 상태가 변경되었습니다.");
+      // alert("파티 상태가 변경되었습니다.");
     } catch (err) {
       console.error("상태 변경 에러:", err);
       alert(err instanceof Error ? err.message : "상태 변경에 실패했습니다");

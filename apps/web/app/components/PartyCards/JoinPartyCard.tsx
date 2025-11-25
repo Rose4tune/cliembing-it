@@ -49,7 +49,7 @@ export function JoinPartyCard({ onJoin, defaultName = "" }: JoinPartyCardProps) 
         setLoading(false);
       } else {
         // 레벨이 있으면 바로 홈으로 이동
-        alert(result.data.message || "파티에 참가했습니다");
+        // alert(result.data.message || "파티에 참가했습니다");
         router.refresh();
         setCode("");
         setLoading(false);
@@ -85,7 +85,7 @@ export function JoinPartyCard({ onJoin, defaultName = "" }: JoinPartyCardProps) 
         return;
       }
 
-      alert(result.data.message || "파티에 참가했습니다");
+      // alert(result.data.message || "파티에 참가했습니다");
       router.refresh();
       setCode("");
       setPendingCode(null);

@@ -128,7 +128,7 @@ export default function UsersManagementPage() {
       setEditTeamId(null);
       setEditRole("participant");
       fetchMembers();
-      alert("멤버 정보가 업데이트되었습니다.");
+      // alert("멤버 정보가 업데이트되었습니다.");
     } catch (err) {
       console.error("멤버 정보 업데이트 에러:", err);
       alert(err instanceof Error ? err.message : "멤버 정보 업데이트에 실패했습니다");

@@ -88,7 +88,7 @@ export default function TeamsManagementPage() {
       setShowCreateForm(false);
       setFormData({ name: "", color: "" });
       fetchTeams();
-      alert("팀이 생성되었습니다.");
+      // alert("팀이 생성되었습니다.");
     } catch (err) {
       console.error("팀 생성 에러:", err);
       alert(err instanceof Error ? err.message : "팀 생성에 실패했습니다");
@@ -128,7 +128,7 @@ export default function TeamsManagementPage() {
       setEditingTeam(null);
       setFormData({ name: "", color: "" });
       fetchTeams();
-      alert("팀이 수정되었습니다.");
+      // alert("팀이 수정되었습니다.");
     } catch (err) {
       console.error("팀 수정 에러:", err);
       alert(err instanceof Error ? err.message : "팀 수정에 실패했습니다");
@@ -152,7 +152,7 @@ export default function TeamsManagementPage() {
       }
 
       fetchTeams();
-      alert("팀이 삭제되었습니다.");
+      // alert("팀이 삭제되었습니다.");
     } catch (err) {
       console.error("팀 삭제 에러:", err);
       alert(err instanceof Error ? err.message : "팀 삭제에 실패했습니다");

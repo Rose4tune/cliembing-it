@@ -94,7 +94,7 @@ export default function ApprovalsPage() {
       }
 
       fetchApprovals();
-      alert(approved ? "점수가 승인되었습니다." : "점수가 거부되었습니다.");
+      // alert(approved ? "점수가 승인되었습니다." : "점수가 거부되었습니다.");
     } catch (err) {
       console.error("승인 상태 업데이트 에러:", err);
       alert(err instanceof Error ? err.message : "승인 상태 업데이트에 실패했습니다");
