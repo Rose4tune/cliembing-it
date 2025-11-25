@@ -1,13 +1,19 @@
-import { NextResponse } from "next/server";
 import { getServerSession, authOptions } from "@pkg/auth";
 import { createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  recalculateUserTotalScore,
+  addBlockForScoreApproval,
+  enqueueRankingCalculation,
+} from "@pkg/shared";
+import type { ClimbingLevel } from "@pkg/shared";
 
 /**
  * 랭킹 계산 및 rankings 테이블 업데이트
+ * @deprecated 이 함수는 더 이상 사용하지 않음 (워커가 처리)
  */
-async function updateRankings(supabase: SupabaseClient, partyId: string) {
+async function _updateRankings(supabase: SupabaseClient, partyId: string) {
   try {
     // 개인 랭킹 계산 (승인된 점수만)
     const personalScoresResult = await executeSupabaseQuery(async () => {
@@ -149,8 +155,9 @@ async function updateRankings(supabase: SupabaseClient, partyId: string) {
       if (allMembersResult.success && allMembersResult.data) {
         // 팀별 점수 합산
         const teamScores: Record<string, number> = {};
+        const membersData = allMembersResult.data;
         teamScoresResult.data.forEach((score: any) => {
-          const member = allMembersResult.data.find((m: any) => m.user_id === score.user_id);
+          const member = membersData.find((m: any) => m.user_id === score.user_id);
           if (member && member.team_id) {
             teamScores[member.team_id] = (teamScores[member.team_id] || 0) + (score.score || 0);
           }
@@ -328,6 +335,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
 
     const supabase = createAdminClient();
 
+    // level_scores 조회 (승인 전에 사용자 정보 확인용)
+    const scoreResult = await executeSupabaseQuery<{
+      id: string;
+      user_id: string;
+      level: string;
+    }>(async () => {
+      return await supabase
+        .from("level_scores")
+        .select("id, user_id, level")
+        .eq("id", scoreId)
+        .eq("party_id", partyId)
+        .single();
+    });
+
+    if (!scoreResult.success || !scoreResult.data) {
+      return errorResponse(scoreResult.error?.message || "점수 정보를 찾을 수 없습니다", 404);
+    }
+
+    const userId = scoreResult.data.user_id;
+    const solvedLevel = scoreResult.data.level as ClimbingLevel;
+
     // level_scores의 approved 컬럼 업데이트
     const result = await executeSupabaseQuery(async () => {
       return await supabase
@@ -346,9 +374,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       return errorResponse(result.error?.message || "승인 상태 업데이트에 실패했습니다", 500);
     }
 
-    // 승인된 경우에만 랭킹 업데이트
+    // 승인된 경우에만 점수 재계산, 블럭 추가, 랭킹 큐 추가
     if (approved === true) {
-      await updateRankings(supabase, partyId);
+      // 1. 사용자 총 점수 재계산 및 집계 테이블 업데이트
+      const recalcResult = await recalculateUserTotalScore(supabase, partyId, userId);
+      if (!recalcResult.success) {
+        console.error("점수 재계산 실패:", recalcResult.error);
+        // 점수 재계산 실패는 로그만 남기고 계속 진행
+      }
+
+      // 2. 블럭 획득 처리
+      const blockResult = await addBlockForScoreApproval(
+        supabase,
+        partyId,
+        userId,
+        solvedLevel,
+        scoreId,
+      );
+      if (!blockResult.success && blockResult.error) {
+        console.error("블럭 추가 실패:", blockResult.error);
+        // 블럭 추가 실패도 로그만 남기고 계속 진행
+      }
+
+      // 3. 랭킹 계산 큐에 이벤트 추가 (비동기 처리)
+      const queueResult = await enqueueRankingCalculation(supabase, partyId, 1);
+      if (!queueResult.success) {
+        console.error("랭킹 계산 큐 추가 실패:", queueResult.error);
+        // 큐 추가 실패는 로그만 남김
+      }
     }
 
     return successResponse({

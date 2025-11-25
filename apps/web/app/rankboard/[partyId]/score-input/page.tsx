@@ -10,7 +10,6 @@ import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
 import { Calculator } from "lucide-react";
 import { DISABLED_LEVELS, ENABLED_LEVELS, type ClimbingLevel } from "@pkg/shared";
-import { calculateScore } from "@pkg/shared";
 import type { Party } from "@pkg/shared";
 
 type LevelColor =
@@ -60,7 +59,7 @@ const levels: { color: LevelColor; label: string }[] = [
   { color: "blue", label: "Blue" },
   { color: "navy", label: "Navy" },
   { color: "purple", label: "Purple" },
-  { color: "hite", label: "Hite" },
+  // Hite는 점수 입력 화면에서 제외
   { color: "white", label: "White" },
   { color: "black", label: "Black" },
 ];
@@ -106,7 +105,7 @@ export default function ScoreInputPage() {
     blue: 0,
     navy: 0,
     purple: 0,
-    hite: 0,
+    hite: 0, // Hite는 상태는 유지하되 UI에서 숨김
     white: 0,
     black: 0,
   });
@@ -145,7 +144,7 @@ export default function ScoreInputPage() {
             blue: 0,
             navy: 0,
             purple: 0,
-            hite: 0,
+            hite: 0, // Hite는 상태는 유지하되 UI에서 숨김
             white: 0,
             black: 0,
           };
@@ -371,25 +370,29 @@ export default function ScoreInputPage() {
             <CardTitle>문제 해결 개수</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {levels.map((level) => {
-              const climbingLevel = colorLevelMap[level.color];
-              const isDisabled = climbingLevel ? DISABLED_LEVELS.includes(climbingLevel) : false;
-              const levelIndex = levels.findIndex((l) => l.color === level.color);
-              const pointsPerProblem = getPointsPerProblem(levelIndex);
+            {levels
+              .filter((level) => level.color !== "hite") // Hite 제외
+              .map((level) => {
+                const climbingLevel = colorLevelMap[level.color];
+                const isDisabled = climbingLevel ? DISABLED_LEVELS.includes(climbingLevel) : false;
+                const levelIndex = levels.findIndex((l) => l.color === level.color);
+                const pointsPerProblem = getPointsPerProblem(levelIndex);
+                // 본인 레벨인지 확인
+                const isUserLevel = userLevel && climbingLevel === userLevel;
 
-              return (
-                <LevelScoreCounter
-                  key={level.color}
-                  level={level.color}
-                  levelLabel={level.label}
-                  score={scores[level.color]}
-                  onChange={(score) => handleScoreChange(level.color, score)}
-                  isMine={true}
-                  disabled={isDisabled}
-                  pointsPerProblem={pointsPerProblem}
-                />
-              );
-            })}
+                return (
+                  <LevelScoreCounter
+                    key={level.color}
+                    level={level.color}
+                    levelLabel={level.label}
+                    score={scores[level.color]}
+                    onChange={(score) => handleScoreChange(level.color, score)}
+                    isMine={isUserLevel || false}
+                    disabled={isDisabled}
+                    pointsPerProblem={pointsPerProblem}
+                  />
+                );
+              })}
           </CardContent>
         </Card>
 

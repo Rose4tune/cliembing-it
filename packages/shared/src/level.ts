@@ -71,12 +71,12 @@ export const DISABLED_LEVELS: ClimbingLevel[] = [
 
 /**
  * 활성화된 레벨 목록 (파티 점수 입력용)
+ * Hite는 점수 입력 화면에서 제외 (특수 레벨)
  */
 export const ENABLED_LEVELS: ClimbingLevel[] = [
   "Blue",
   "Navy",
   "Purple",
-  "Hite",
   "White",
   "Black",
 ];
@@ -131,7 +131,8 @@ export const LEVEL_WEIGHTS: Record<ClimbingLevel, number> = {
 };
 
 /**
- * 문제 수로부터 점수 계산
+ * 문제 수로부터 점수 계산 (기존 방식, deprecated)
+ * @deprecated Use calculateScoreWithRules instead
  */
 export function calculateScore(
   level: ClimbingLevel,
@@ -139,6 +140,55 @@ export function calculateScore(
 ): number {
   const weight = LEVEL_WEIGHTS[level];
   return problemCount * weight;
+}
+
+/**
+ * 한 단계 위 레벨 찾기
+ */
+export function getLevelAbove(level: ClimbingLevel): ClimbingLevel | null {
+  const currentOrder = LEVEL_ORDER[level];
+  // Hite는 특수 처리 (Purple → White, White는 한 단계 위가 없음)
+  if (level === "White") {
+    return null; // White가 최상위
+  }
+  if (level === "Hite") {
+    return "White"; // Hite → White
+  }
+
+  // 일반적인 경우: 순서상 다음 레벨
+  // Hite(8)를 건너뛰고 White(9)로 이동
+  if (level === "Purple") {
+    return "White"; // Purple → White (Hite 건너뛰기)
+  }
+
+  // 다른 레벨들은 순서대로
+  const nextOrder = currentOrder + 1;
+  const nextLevel = Object.entries(LEVEL_ORDER).find(
+    ([, order]) => order === nextOrder,
+  )?.[0] as ClimbingLevel | undefined;
+
+  return nextLevel || null;
+}
+
+/**
+ * 레벨이 점수 인정 범위 내인지 확인
+ * @param solvedLevel 풀이한 레벨
+ * @param userBaseLevel 사용자의 기준 레벨
+ */
+export function isScoreEligible(
+  solvedLevel: ClimbingLevel,
+  userBaseLevel: ClimbingLevel | null,
+): boolean {
+  if (!userBaseLevel) return false;
+
+  // 본인 레벨이면 인정
+  if (solvedLevel === userBaseLevel) return true;
+
+  // 한 단계 위 레벨이면 인정
+  const levelAbove = getLevelAbove(userBaseLevel);
+  if (levelAbove && solvedLevel === levelAbove) return true;
+
+  return false;
 }
 
 /**

@@ -29,7 +29,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       } else {
         supabase = await createServerClient();
       }
-    } catch (error) {
+    } catch {
       supabase = await createServerClient();
     }
 
@@ -46,7 +46,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     }
 
     // 파티 정보 조회
-    const partyResult = await executeSupabaseQuery(async () => {
+    const partyResult = await executeSupabaseQuery<{
+      id: string;
+      name: string;
+      status: string;
+      start_at: string | null;
+      end_at: string | null;
+    }>(async () => {
       return await supabase
         .from("parties")
         .select("id, name, status, start_at, end_at")
@@ -68,15 +74,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         .eq("party_id", partyId);
     });
 
-    // rankings 테이블에 데이터가 있으면 사용, 없으면 실시간 계산
-    let personalRankings: any[] = [];
+    // rankings 테이블에서 그룹별 랭킹 조회
+    let cruxRankings: any[] = [];
+    let gripRankings: any[] = [];
     let teamRankings: any[] = [];
     let challengeRankings: any[] = [];
 
     if (rankingsResult.success && rankingsResult.data) {
       rankingsResult.data.forEach((ranking: any) => {
-        if (ranking.type === "personal") {
-          personalRankings = ranking.result || [];
+        if (ranking.type === "crux") {
+          cruxRankings = ranking.result || [];
+        } else if (ranking.type === "grip") {
+          gripRankings = ranking.result || [];
         } else if (ranking.type === "team") {
           teamRankings = ranking.result || [];
         } else if (ranking.type === "challenge") {
@@ -85,98 +94,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       });
     }
 
-    // 개인 랭킹이 없으면 실시간 계산 (승인된 점수만)
-    if (personalRankings.length === 0) {
-      const personalScoresResult = await executeSupabaseQuery(async () => {
-        return await supabase
-          .from("level_scores")
-          .select("user_id, score")
-          .eq("party_id", partyId)
-          .eq("approved", true);
-      });
+    // 그룹별 랭킹이 없으면 실시간 계산은 하지 않음 (워커가 처리)
+    // 여기서는 캐시된 랭킹만 반환
+    const personalRankings = [...cruxRankings, ...gripRankings].sort(
+      (a, b) => b.totalScore - a.totalScore,
+    );
 
-      if (personalScoresResult.success && personalScoresResult.data) {
-        const userIds = [...new Set(personalScoresResult.data.map((item: any) => item.user_id))];
-
-        if (userIds.length > 0) {
-          const usersResult = await executeSupabaseQuery(async () => {
-            return await supabase.from("users").select("id, nickname, email").in("id", userIds);
-          });
-
-          const usersMap = new Map();
-          if (usersResult.success && usersResult.data) {
-            usersResult.data.forEach((user: any) => {
-              usersMap.set(user.id, user);
-            });
-          }
-
-          // party_members에서 팀 정보 가져오기
-          const membersResult = await executeSupabaseQuery(async () => {
-            return await supabase
-              .from("party_members")
-              .select("user_id, team_id")
-              .eq("party_id", partyId)
-              .in("user_id", userIds);
-          });
-
-          const teamMap = new Map();
-          if (membersResult.success && membersResult.data) {
-            const teamIds = membersResult.data
-              .map((m: any) => m.team_id)
-              .filter((id: string | null) => id !== null);
-
-            if (teamIds.length > 0) {
-              const teamsResult = await executeSupabaseQuery(async () => {
-                return await supabase.from("teams").select("id, name").in("id", teamIds);
-              });
-
-              if (teamsResult.success && teamsResult.data) {
-                teamsResult.data.forEach((team: any) => {
-                  teamMap.set(team.id, team);
-                });
-              }
-            }
-
-            membersResult.data.forEach((member: any) => {
-              if (member.team_id) {
-                const team = teamMap.get(member.team_id);
-                if (team) {
-                  teamMap.set(member.user_id, team);
-                }
-              }
-            });
-          }
-
-          const personalScores: Record<string, number> = {};
-          personalScoresResult.data.forEach((item: any) => {
-            const userId = item.user_id;
-            personalScores[userId] = (personalScores[userId] || 0) + (item.score || 0);
-          });
-
-          personalRankings = Object.entries(personalScores)
-            .map(([userId, totalScore]) => {
-              const user = usersMap.get(userId) || {
-                id: userId,
-                nickname: "알 수 없음",
-                email: null,
-              };
-              const team = teamMap.get(userId);
-              return {
-                userId: user.id,
-                nickname: user.nickname,
-                teamId: team?.id || null,
-                teamName: team?.name || null,
-                totalScore,
-              };
-            })
-            .sort((a, b) => b.totalScore - a.totalScore)
-            .map((item, index) => ({
-              ...item,
-              rank: index + 1,
-            }));
-        }
-      }
-    }
+    // 기존 실시간 계산 로직은 제거됨 (워커가 처리)
 
     // 팀 랭킹이 없으면 실시간 계산
     if (teamRankings.length === 0) {
@@ -248,7 +172,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         timeRemaining,
         progress,
       },
-      personal: personalRankings,
+      personal: personalRankings, // 전체 개인 랭킹 (Crux + Grip 합쳐서)
+      crux: cruxRankings, // Crux 그룹 랭킹
+      grip: gripRankings, // Grip 그룹 랭킹
       team: teamRankings,
       challenge: challengeRankings,
     });

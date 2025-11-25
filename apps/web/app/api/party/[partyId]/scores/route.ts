@@ -1,9 +1,8 @@
-import { NextResponse } from "next/server";
 import { getServerSession, authOptions } from "@pkg/auth";
 import { createServerClient, createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
 import type { ClimbingLevel } from "@pkg/shared";
-import { calculateScore, ENABLED_LEVELS } from "@pkg/shared";
+import { ENABLED_LEVELS, calculateLevelScore, type LevelPointsConfig } from "@pkg/shared";
 
 /**
  * 점수 조회 API
@@ -32,7 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       } else {
         supabase = await createServerClient();
       }
-    } catch (error) {
+    } catch {
       supabase = await createServerClient();
     }
 
@@ -109,24 +108,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       } else {
         supabase = await createServerClient();
       }
-    } catch (error) {
+    } catch {
       supabase = await createServerClient();
     }
 
-    // 파티 멤버 확인
-    const { data: member } = await supabase
+    // 파티 멤버 확인 및 기준 레벨 가져오기
+    const { data: member, error: memberError } = await supabase
       .from("party_members")
-      .select("id")
+      .select("id, level")
       .eq("party_id", partyId)
       .eq("user_id", userId)
       .single();
 
-    if (!member) {
+    if (memberError || !member) {
       return errorResponse("파티에 참가하지 않았습니다", 403);
     }
 
-    // 점수 계산
-    const score = calculateScore(level as ClimbingLevel, problemCount);
+    const userBaseLevel = member.level as ClimbingLevel | null;
+    if (!userBaseLevel) {
+      return errorResponse("사용자의 기준 레벨이 설정되지 않았습니다", 400);
+    }
+
+    // party_ruleset에서 점수 설정 가져오기
+    const { data: ruleset } = await supabase
+      .from("party_ruleset")
+      .select("level_points")
+      .eq("party_id", partyId)
+      .single();
+
+    const levelPointsConfig: LevelPointsConfig | null = ruleset?.level_points || null;
+
+    // 점수 계산 (새 규칙 적용)
+    const solvedLevel = level as ClimbingLevel;
+    const score = calculateLevelScore(solvedLevel, problemCount, userBaseLevel, levelPointsConfig);
 
     // 기존 점수 확인
     const { data: existing } = await supabase

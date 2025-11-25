@@ -142,13 +142,17 @@ export function LevelScoreCounter({
     // );
   }
 
-  const bgColor = isMine ? colors.light : colors.light + "80";
-  const borderColor = isMine ? colors.border : colors.border + "80";
-  const textColor = isMine ? colors.dark : colors.dark + "B3";
+  // 모든 카드는 동일한 색상 사용
+  const bgColor = colors.light;
+  const textColor = colors.dark;
+  const borderColor = colors.border;
 
   return (
     <div
-      className="rounded-lg border p-4 flex justify-between items-center"
+      className={cn(
+        "rounded-lg p-4 flex justify-between items-center",
+        isMine ? "border-2" : "border",
+      )}
       style={{
         backgroundColor: bgColor,
         borderColor: borderColor,
