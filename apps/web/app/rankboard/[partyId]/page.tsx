@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { Header } from "../../components/Header";
@@ -10,6 +10,7 @@ import { Trophy } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
 import { PARTY_STATUS_LABELS, PARTY_STATUS_COLORS, type PartyStatus } from "@pkg/shared";
 import type { Party } from "@pkg/shared";
+import { createClient } from "@pkg/supabase/client";
 
 type TabType = "group" | "team" | "challenge";
 type SubTabType = "crux" | "grip";
@@ -25,6 +26,7 @@ export default function RankboardPage() {
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userGroup, setUserGroup] = useState<SubTabType | null>(null);
   const [rankingData, setRankingData] = useState<{
     party: {
       id: string;
@@ -35,7 +37,15 @@ export default function RankboardPage() {
       timeRemaining: string | null;
       progress: number;
     };
-    personal: Array<{
+    crux?: Array<{
+      rank: number;
+      userId: string;
+      nickname: string;
+      teamId: string | null;
+      teamName: string | null;
+      totalScore: number;
+    }>;
+    grip?: Array<{
       rank: number;
       userId: string;
       nickname: string;
@@ -58,43 +68,99 @@ export default function RankboardPage() {
     }>;
   } | null>(null);
 
-  // 랭킹 데이터 조회
+  // 랭킹 데이터 조회 함수 (Realtime에서도 사용)
+  const fetchRankingData = useCallback(async () => {
+    if (!partyId) return;
+
+    try {
+      setLoading(true);
+
+      // 사용자 그룹 조회
+      const memberResponse = await fetch(`/api/party/${partyId}/member`);
+      if (memberResponse.ok) {
+        const memberResult = await memberResponse.json();
+        if (memberResult.success && memberResult.data?.level) {
+          const level = memberResult.data.level;
+          // Crux 그룹: White, Hite
+          // Grip 그룹: Blue, Navy, Purple
+          if (level === "White" || level === "Hite") {
+            setUserGroup("crux");
+            setActiveSubTab("crux");
+          } else if (["Blue", "Navy", "Purple"].includes(level)) {
+            setUserGroup("grip");
+            setActiveSubTab("grip");
+          }
+        }
+      }
+
+      // 랭킹 데이터 조회
+      const response = await fetch(`/api/party/${partyId}/rankings`);
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setRankingData(result.data);
+        // 파티 정보도 랭킹 API에서 가져온 데이터로 설정
+        if (result.data.party) {
+          setParty({
+            id: result.data.party.id,
+            name: result.data.party.name,
+            status: result.data.party.status as PartyStatus,
+            total_participants: result.data.party.participants,
+            total_teams: result.data.party.teams,
+            start_at: null,
+            end_at: null,
+          } as Party);
+        }
+      } else {
+        setError(result.error || "랭킹 정보를 불러올 수 없습니다");
+      }
+    } catch (error) {
+      console.error("랭킹 조회 에러:", error);
+      setError("랭킹 정보를 불러올 수 없습니다");
+    } finally {
+      setLoading(false);
+    }
+  }, [partyId]);
+
+  // 사용자 그룹 조회 및 랭킹 데이터 조회
   useEffect(() => {
     if (!partyId) return;
 
-    const fetchRankings = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/party/${partyId}/rankings`);
-        const result = await response.json();
+    // 초기 데이터 로드
+    fetchRankingData();
 
-        if (response.ok && result.success) {
-          setRankingData(result.data);
-          // 파티 정보도 랭킹 API에서 가져온 데이터로 설정
-          if (result.data.party) {
-            setParty({
-              id: result.data.party.id,
-              name: result.data.party.name,
-              status: result.data.party.status as PartyStatus,
-              total_participants: result.data.party.participants,
-              total_teams: result.data.party.teams,
-              start_at: null,
-              end_at: null,
-            } as Party);
-          }
-        } else {
-          setError(result.error || "랭킹 정보를 불러올 수 없습니다");
-        }
-      } catch (error) {
-        console.error("랭킹 조회 에러:", error);
-        setError("랭킹 정보를 불러올 수 없습니다");
-      } finally {
-        setLoading(false);
-      }
+    // Supabase Realtime 구독: level_scores 변경 시 자동으로 랭킹 업데이트
+    const supabase = createClient();
+    if (!supabase) {
+      console.error("Supabase 클라이언트 생성 실패");
+      return;
+    }
+
+    // level_scores 테이블 변경 감지 (INSERT, UPDATE, DELETE)
+    const channel = supabase
+      .channel(`level_scores_changes_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE 모두 감지
+          schema: "public",
+          table: "level_scores",
+          filter: `party_id=eq.${partyId}`, // 해당 파티의 변경만 감지
+        },
+        (payload) => {
+          console.log("level_scores 변경 감지:", payload);
+          // 랭킹 데이터 다시 조회 (로딩 상태 없이)
+          setLoading(false); // 로딩 상태는 유지하지 않음
+          fetchRankingData();
+        },
+      )
+      .subscribe();
+
+    // cleanup: 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      supabase.removeChannel(channel);
     };
-
-    fetchRankings();
-  }, [partyId]);
+  }, [partyId, fetchRankingData]);
 
   // 일반 사용자의 접근 제한 체크 (진행중이 아니거나 1시간 전이 아닌 경우)
   useEffect(() => {
@@ -192,7 +258,9 @@ export default function RankboardPage() {
   const statusLabel = PARTY_STATUS_LABELS[party?.status as PartyStatus] || party?.status;
 
   // 랭킹 데이터
-  const personalRankings = rankingData.personal || [];
+  const cruxRankings = rankingData.crux || [];
+  const gripRankings = rankingData.grip || [];
+  const currentGroupRankings = activeSubTab === "crux" ? cruxRankings : gripRankings;
   const teamRankings = rankingData.team || [];
   const challengeRankings = rankingData.challenge || [];
   const partyInfo = rankingData.party;
@@ -327,12 +395,12 @@ export default function RankboardPage() {
               <div className="space-y-4">
                 <p className="text-gray-400 text-right">Hunted Point</p>
                 <div className="space-y-2">
-                  {personalRankings.length === 0 ? (
+                  {currentGroupRankings.length === 0 ? (
                     <div className="text-center text-muted-foreground py-8">
-                      랭킹 데이터가 없습니다.
+                      {activeSubTab === "crux" ? "Crux" : "Grip"} 그룹 랭킹 데이터가 없습니다.
                     </div>
                   ) : (
-                    personalRankings.map((item) => (
+                    currentGroupRankings.map((item) => (
                       <Card key={item.userId} className="p-4">
                         <CardContent>
                           <div className="flex items-center justify-between">

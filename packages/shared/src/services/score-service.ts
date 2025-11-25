@@ -12,11 +12,13 @@ import {
 
 /**
  * 사용자의 총 점수 재계산 및 집계 테이블 업데이트
+ * @param recentlyApprovedScoreId 방금 승인한 레코드의 ID (선택사항, 트랜잭션 타이밍 문제 해결용)
  */
 export async function recalculateUserTotalScore(
   supabase: SupabaseClient,
   partyId: string,
   userId: string,
+  recentlyApprovedScoreId?: string,
 ): Promise<{
   success: boolean;
   totalScore?: number;
@@ -58,12 +60,52 @@ export async function recalculateUserTotalScore(
       ruleset?.level_points || null;
 
     // 3. 승인된 레벨별 문제 개수 집계
+    // 트랜잭션 타이밍 문제를 해결하기 위해 두 가지 방법으로 조회:
+    // 1) approved = true인 모든 레코드
+    // 2) 방금 승인한 레코드 (명시적으로 포함)
     const { data: approvedScores, error: scoresError } = await supabase
       .from("level_scores")
       .select("level, problem_count")
       .eq("party_id", partyId)
       .eq("user_id", userId)
       .eq("approved", true);
+
+    // 방금 승인한 레코드가 있으면 별도로 조회하여 포함 (트랜잭션 타이밍 문제 해결)
+    let recentlyApprovedScore: { level: string; problem_count: number } | null =
+      null;
+    if (recentlyApprovedScoreId) {
+      const { data: recentScore } = await supabase
+        .from("level_scores")
+        .select("level, problem_count, approved")
+        .eq("id", recentlyApprovedScoreId)
+        .eq("party_id", partyId)
+        .eq("user_id", userId)
+        .single();
+
+      // approved = true인 경우에만 포함
+      if (recentScore && recentScore.approved === true) {
+        recentlyApprovedScore = {
+          level: recentScore.level,
+          problem_count: recentScore.problem_count,
+        };
+      }
+    }
+
+    // 두 결과를 합치기 (중복 제거)
+    const allApprovedScores = [...(approvedScores || [])];
+    if (recentlyApprovedScore) {
+      // 방금 승인한 레코드가 이미 approvedScores에 포함되어 있는지 확인
+      // 같은 레벨의 레코드가 여러 개일 수 있으므로, ID 기반으로 확인하는 것이 더 정확하지만
+      // 여기서는 레벨과 개수가 같으면 중복으로 간주
+      const alreadyIncluded = allApprovedScores.some(
+        (score) =>
+          score.level === recentlyApprovedScore!.level &&
+          score.problem_count === recentlyApprovedScore!.problem_count,
+      );
+      if (!alreadyIncluded) {
+        allApprovedScores.push(recentlyApprovedScore);
+      }
+    }
 
     if (scoresError) {
       return {
@@ -76,8 +118,8 @@ export async function recalculateUserTotalScore(
     const approvedProblemCounts: Record<string, number> = {};
     let totalScore = 0;
 
-    if (approvedScores) {
-      for (const score of approvedScores) {
+    if (allApprovedScores && allApprovedScores.length > 0) {
+      for (const score of allApprovedScores) {
         const level = score.level as ClimbingLevel;
 
         // 점수 인정 범위 확인

@@ -128,6 +128,42 @@ export async function POST(request: Request) {
       );
     }
 
+    // 10. party_ruleset 레코드 생성 (기본 점수 설정)
+    const defaultLevelPoints = {
+      Grip: {
+        self: 5,
+        above: 10,
+      },
+      Crux: {
+        White: {
+          self: 4,
+          above: 10,
+        },
+        Hite: {
+          Purple: 3,
+          White: 7,
+        },
+      },
+    };
+
+    const rulesetResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("party_ruleset")
+        .insert({
+          party_id: partyId,
+          level_points: defaultLevelPoints,
+          height_thresholds: [], // 기본값: 빈 배열 (필요시 추후 설정)
+          line_bonus: 10, // 기본값
+        })
+        .select()
+        .single();
+    });
+
+    if (!rulesetResult.success) {
+      // 파티는 생성되었지만 ruleset 추가 실패 - 경고만 로그하고 파티는 반환
+      console.warn("파티가 생성되었지만 점수 규칙 설정에 실패했습니다:", rulesetResult.error);
+    }
+
     return successResponse({
       party: result.data,
       message: "파티가 성공적으로 생성되었습니다",

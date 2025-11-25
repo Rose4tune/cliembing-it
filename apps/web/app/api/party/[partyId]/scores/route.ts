@@ -142,48 +142,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     const solvedLevel = level as ClimbingLevel;
     const score = calculateLevelScore(solvedLevel, problemCount, userBaseLevel, levelPointsConfig);
 
-    // 기존 점수 확인
-    const { data: existing } = await supabase
-      .from("level_scores")
-      .select("id")
-      .eq("party_id", partyId)
-      .eq("user_id", userId)
-      .eq("level", level)
-      .single();
+    // Unique 제약조건이 제거되었으므로, 같은 레벨에 대해 여러 레코드가 가능
+    // 승인된 레코드는 보존하고, 새로운 승인 요청은 항상 새 레코드로 생성
+    // (승인 대기 레코드도 업데이트하지 않고 새로 생성하여 각 승인 요청을 독립적으로 관리)
 
-    let result;
-    if (existing) {
-      // 업데이트: 점수가 변경되면 승인 상태를 NULL로 리셋 (다시 승인 필요)
-      result = await executeSupabaseQuery(async () => {
-        return await supabase
-          .from("level_scores")
-          .update({
-            problem_count: problemCount,
-            score,
-            approved: null, // 점수 변경 시 승인 상태 초기화
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id)
-          .select()
-          .single();
-      });
-    } else {
-      // 생성: 새 점수는 승인 대기 상태로 저장
-      result = await executeSupabaseQuery(async () => {
-        return await supabase
-          .from("level_scores")
-          .insert({
-            party_id: partyId,
-            user_id: userId,
-            level,
-            problem_count: problemCount,
-            score,
-            approved: null, // 승인 대기 상태
-          })
-          .select()
-          .single();
-      });
-    }
+    // 항상 새 레코드로 생성 (승인된 레코드나 승인 대기 레코드와 관계없이)
+    const result = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("level_scores")
+        .insert({
+          party_id: partyId,
+          user_id: userId,
+          level,
+          problem_count: problemCount,
+          score,
+          approved: null, // 승인 대기 상태
+        })
+        .select()
+        .single();
+    });
 
     if (!result.success || !result.data) {
       return errorResponse(result.error?.message || "점수 저장에 실패했습니다", 500);

@@ -8,8 +8,16 @@ import { RankboardFooterNavigation } from "../../../components/RankboardFooterNa
 import { LevelScoreCounter } from "../../../components/ScoreCounter/LevelScoreCounter";
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@pkg/ui-web";
 import { Calculator } from "lucide-react";
-import { DISABLED_LEVELS, ENABLED_LEVELS, type ClimbingLevel } from "@pkg/shared";
+import {
+  DISABLED_LEVELS,
+  ENABLED_LEVELS,
+  type ClimbingLevel,
+  calculatePointsPerProblem,
+  isScoreEligible,
+  type LevelPointsConfig,
+} from "@pkg/shared";
 import type { Party } from "@pkg/shared";
 
 type LevelColor =
@@ -64,39 +72,14 @@ const levels: { color: LevelColor; label: string }[] = [
   { color: "black", label: "Black" },
 ];
 
-// 점수 계산 로직: 레벨별로 다른 점수 배수
-// 이미지 기준: 레벨 1-5 = 1점/문제, 레벨 6 = 6점/문제, 레벨 9 = 21점/문제
-const getPointsPerProblem = (levelIndex: number): number => {
-  // levelIndex는 0부터 시작 (Red=0, Orange=1, ..., Black=9)
-  // 실제 레벨 번호는 levelIndex + 1
-  const levelNumber = levelIndex + 1;
-
-  if (levelNumber <= 5) {
-    // 레벨 1-5: 문제당 1점
-    return 1;
-  } else if (levelNumber === 6) {
-    // 레벨 6: 문제당 6점
-    return 6;
-  } else if (levelNumber === 9) {
-    // 레벨 9: 문제당 21점
-    return 21;
-  } else {
-    // 레벨 7, 8, 10: 중간 값 (임시로 설정, 나중에 조정 필요)
-    // 레벨 7 = 7점, 레벨 8 = 14점, 레벨 10 = 30점 (예상)
-    return levelNumber === 7 ? 7 : levelNumber === 8 ? 14 : 30;
-  }
-};
-
-const getPointsForLevel = (levelIndex: number, count: number): number => {
-  if (count === 0) return 0;
-  return getPointsPerProblem(levelIndex) * count;
-};
+// 점수 계산은 이제 calculatePointsPerProblem 함수를 사용
 
 export default function ScoreInputPage() {
   const { data: session } = useSession();
   const params = useParams();
   const partyId = params?.partyId as string;
 
+  // 승인 요청할 개수 (입력 필드에서 사용, 승인 요청 후 0으로 리셋)
   const [scores, setScores] = useState<Record<LevelColor, number>>({
     red: 0,
     orange: 0,
@@ -109,14 +92,28 @@ export default function ScoreInputPage() {
     white: 0,
     black: 0,
   });
+  // 승인된 총 개수 (누적, 읽기 전용 표시용)
+  const [approvedScores, setApprovedScores] = useState<Record<LevelColor, number>>({
+    red: 0,
+    orange: 0,
+    yellow: 0,
+    green: 0,
+    blue: 0,
+    navy: 0,
+    purple: 0,
+    hite: 0,
+    white: 0,
+    black: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [party, setParty] = useState<Party | null>(null);
   const [userLevel, setUserLevel] = useState<string>("");
   const [userTeam, setUserTeam] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [approvedTotalScore, setApprovedTotalScore] = useState(0);
+  const [levelPointsConfig, setLevelPointsConfig] = useState<LevelPointsConfig | null>(null);
 
   // 파티 정보 및 사용자 정보 조회
   useEffect(() => {
@@ -136,7 +133,8 @@ export default function ScoreInputPage() {
         const scoresResponse = await fetch(`/api/party/${partyId}/scores`);
         const scoresResult = await scoresResponse.json();
         if (scoresResponse.ok && scoresResult.success) {
-          const existingScores: Record<LevelColor, number> = {
+          // 승인된 총 개수 (누적)
+          const approvedCounts: Record<LevelColor, number> = {
             red: 0,
             orange: 0,
             yellow: 0,
@@ -144,12 +142,14 @@ export default function ScoreInputPage() {
             blue: 0,
             navy: 0,
             purple: 0,
-            hite: 0, // Hite는 상태는 유지하되 UI에서 숨김
+            hite: 0,
             white: 0,
             black: 0,
           };
 
           let approvedScore = 0;
+          // 승인된 레코드의 problem_count를 합산
+          // (같은 레벨에 여러 승인된 레코드가 있을 수 있음)
           (scoresResult.data.scores || []).forEach(
             (score: {
               level: ClimbingLevel;
@@ -159,7 +159,10 @@ export default function ScoreInputPage() {
             }) => {
               const color = levelColorMap[score.level];
               if (color) {
-                existingScores[color] = score.problem_count;
+                // 승인된 레코드만 합산
+                if (score.approved === true) {
+                  approvedCounts[color] = (approvedCounts[color] || 0) + score.problem_count;
+                }
               }
               // 승인된 점수만 합산
               if (score.approved === true) {
@@ -168,7 +171,21 @@ export default function ScoreInputPage() {
             },
           );
 
-          setScores(existingScores);
+          // 승인된 총 개수는 별도 state로 저장
+          setApprovedScores(approvedCounts);
+          // 승인 요청할 개수는 항상 0으로 시작 (입력 필드 초기값)
+          setScores({
+            red: 0,
+            orange: 0,
+            yellow: 0,
+            green: 0,
+            blue: 0,
+            navy: 0,
+            purple: 0,
+            hite: 0,
+            white: 0,
+            black: 0,
+          });
           setApprovedTotalScore(approvedScore);
         }
 
@@ -178,6 +195,13 @@ export default function ScoreInputPage() {
         if (memberResponse.ok && memberResult.success) {
           setUserLevel(memberResult.data.level || "");
           setUserTeam(memberResult.data.team_name || "");
+        }
+
+        // party_ruleset.level_points 조회
+        const rulesetResponse = await fetch(`/api/party/${partyId}/ruleset`);
+        const rulesetResult = await rulesetResponse.json();
+        if (rulesetResponse.ok && rulesetResult.success && rulesetResult.data?.level_points) {
+          setLevelPointsConfig(rulesetResult.data.level_points);
         }
       } catch (error) {
         console.error("데이터 조회 에러:", error);
@@ -195,33 +219,48 @@ export default function ScoreInputPage() {
       ...prev,
       [level]: score,
     }));
-    setSuccess(false);
+    // 점수 변경 시 다이얼로그는 자동으로 닫히지 않음 (사용자가 수동으로 닫음)
   };
 
-  // 점수 계산
+  // 점수 계산 (새로운 로직 적용)
   const scoreCalculation = useMemo(() => {
+    if (!userLevel) return [];
+
+    const userBaseLevel = userLevel as ClimbingLevel;
     const calculations: Array<{
-      levelIndex: number;
+      level: ClimbingLevel;
       label: string;
       count: number;
       points: number;
+      pointsPerProblem: number;
     }> = [];
 
-    levels.forEach((level, index) => {
+    levels.forEach((level) => {
+      const climbingLevel = colorLevelMap[level.color];
+      if (!climbingLevel) return;
+
       const count = scores[level.color];
       if (count > 0) {
-        const points = getPointsForLevel(index, count);
-        calculations.push({
-          levelIndex: index + 1,
-          label: level.label,
-          count,
-          points,
-        });
+        const pointsPerProblem = calculatePointsPerProblem(
+          climbingLevel,
+          userBaseLevel,
+          levelPointsConfig,
+        );
+        const points = pointsPerProblem * count;
+        if (points > 0) {
+          calculations.push({
+            level: climbingLevel,
+            label: level.label,
+            count,
+            points,
+            pointsPerProblem,
+          });
+        }
       }
     });
 
     return calculations;
-  }, [scores]);
+  }, [scores, userLevel, levelPointsConfig]);
 
   const totalScore = useMemo(() => {
     return scoreCalculation.reduce((sum, calc) => sum + calc.points, 0);
@@ -232,7 +271,7 @@ export default function ScoreInputPage() {
 
     setSaving(true);
     setError(null);
-    setSuccess(false);
+    setShowSuccessDialog(false); // 이전 다이얼로그 닫기
 
     try {
       // 활성화된 레벨만 저장
@@ -263,8 +302,24 @@ export default function ScoreInputPage() {
       });
 
       await Promise.all(savePromises.filter((p) => p !== null));
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+
+      // 점수 저장 후 입력 필드를 0으로 리셋
+      // 모든 레벨을 0으로 리셋 (승인된 개수는 approvedScores에 그대로 유지)
+      const resetScores: Record<LevelColor, number> = {
+        red: 0,
+        orange: 0,
+        yellow: 0,
+        green: 0,
+        blue: 0,
+        navy: 0,
+        purple: 0,
+        hite: 0,
+        white: 0,
+        black: 0,
+      };
+      setScores(resetScores);
+
+      setShowSuccessDialog(true);
     } catch (error) {
       console.error("점수 저장 에러:", error);
       setError(error instanceof Error ? error.message : "점수 저장에 실패했습니다");
@@ -331,15 +386,6 @@ export default function ScoreInputPage() {
           </Card>
         )}
 
-        {/* 성공 메시지 */}
-        {success && (
-          <Card className="border-green-500">
-            <CardContent className="pt-6">
-              <div className="text-green-600 text-sm">점수가 저장되었습니다</div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* 내 기준 레벨 섹션 */}
         <Card className="space-y-4">
           <CardHeader className="flex justify-between items-center">
@@ -374,11 +420,26 @@ export default function ScoreInputPage() {
               .filter((level) => level.color !== "hite") // Hite 제외
               .map((level) => {
                 const climbingLevel = colorLevelMap[level.color];
-                const isDisabled = climbingLevel ? DISABLED_LEVELS.includes(climbingLevel) : false;
-                const levelIndex = levels.findIndex((l) => l.color === level.color);
-                const pointsPerProblem = getPointsPerProblem(levelIndex);
+                if (!climbingLevel) return null;
+
+                const systemDisabled = DISABLED_LEVELS.includes(climbingLevel);
+
+                // 점수 인정 여부 확인
+                const userBaseLevel = userLevel ? (userLevel as ClimbingLevel) : null;
+                const isScoreEligibleLevel =
+                  userBaseLevel && isScoreEligible(climbingLevel, userBaseLevel);
+
+                // 점수 인정 안 되면 비활성화
+                const isDisabled = systemDisabled || !isScoreEligibleLevel;
+
+                // 문제당 점수 계산
+                const pointsPerProblem =
+                  userBaseLevel && isScoreEligibleLevel
+                    ? calculatePointsPerProblem(climbingLevel, userBaseLevel, levelPointsConfig)
+                    : 0;
+
                 // 본인 레벨인지 확인
-                const isUserLevel = userLevel && climbingLevel === userLevel;
+                const isUserLevel = userBaseLevel && climbingLevel === userBaseLevel;
 
                 return (
                   <LevelScoreCounter
@@ -390,9 +451,11 @@ export default function ScoreInputPage() {
                     isMine={isUserLevel || false}
                     disabled={isDisabled}
                     pointsPerProblem={pointsPerProblem}
+                    approvedCount={approvedScores[level.color]}
                   />
                 );
-              })}
+              })
+              .filter(Boolean)}
           </CardContent>
         </Card>
 
@@ -413,36 +476,32 @@ export default function ScoreInputPage() {
               <>
                 <div className="space-y-2">
                   {scoreCalculation.map((calc) => (
-                    <div
-                      key={calc.levelIndex}
-                      className="flex items-center justify-between text-sm"
-                    >
+                    <div key={calc.level} className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
-                        레벨 {calc.levelIndex} ×{calc.count}개
+                        {calc.label} ×{calc.count}개
                       </span>
                       <span className="font-semibold">
-                        {getPointsPerProblem(calc.levelIndex - 1)}점 × {calc.count} = {calc.points}
-                        점
+                        {calc.pointsPerProblem}점 × {calc.count} = {calc.points}점
                       </span>
                     </div>
                   ))}
                 </div>
-                <div className="border-t pt-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">총 점수</span>
-                    <span className="text-xl font-bold text-primary">{totalScore}점</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">승인된 점수</span>
-                    <span className="font-semibold text-green-600">{approvedTotalScore}점</span>
-                  </div>
-                </div>
               </>
             )}
+            <div className="border-t pt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">요청 할 점수</span>
+                <span className="text-xl font-bold text-primary">{totalScore}점</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">승인된 점수</span>
+              <span className="font-semibold text-green-600">{approvedTotalScore}점</span>
+            </div>
           </CardContent>
         </Card>
 
-        {/* 점수 저장하기 버튼 */}
+        {/* 점수 승인 요청하기 버튼 */}
         <Button
           variant="primary"
           size="lg"
@@ -450,11 +509,21 @@ export default function ScoreInputPage() {
           onClick={handleSaveScore}
           disabled={totalScore === 0 || saving}
         >
-          {saving ? "저장 중..." : "점수 저장하기"}
+          {saving ? "요청 중..." : "점수 승인 요청하기"}
         </Button>
       </main>
 
       <RankboardFooterNavigation partyId={partyId} />
+
+      {/* 성공 다이얼로그 */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>점수 승인 요청</DialogTitle>
+            <DialogDescription>점수 승인 요청을 보냈습니다.</DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

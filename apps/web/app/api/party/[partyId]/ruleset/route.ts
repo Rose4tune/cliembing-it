@@ -3,8 +3,8 @@ import { createServerClient, createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
 
 /**
- * 팀 점수 조회 API (테트리스 게임 점수 합산)
- * GET /api/party/[partyId]/team-score?teamId=xxx
+ * 파티 룰셋 조회 API
+ * GET /api/party/[partyId]/ruleset
  */
 export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
   try {
@@ -19,12 +19,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     }
 
     const { partyId } = await params;
-    const { searchParams } = new URL(request.url);
-    const teamId = searchParams.get("teamId");
-
-    if (!teamId) {
-      return errorResponse("팀 ID가 필요합니다", 400);
-    }
 
     // Supabase 클라이언트 생성
     const userRole = (session.user as { role?: string | null })?.role;
@@ -39,28 +33,36 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       supabase = await createServerClient();
     }
 
-    // 테트리스 게임 점수 합산 (완료된 게임만)
-    const gameSessionsResult = await executeSupabaseQuery(async () => {
-      return await supabase
-        .from("game_sessions")
-        .select("team_score")
-        .eq("party_id", partyId)
-        .eq("team_id", teamId)
-        .eq("status", "finished");
-    });
+    // 파티 멤버 확인
+    const { data: member } = await supabase
+      .from("party_members")
+      .select("id")
+      .eq("party_id", partyId)
+      .eq("user_id", userId)
+      .single();
 
-    if (!gameSessionsResult.success || !gameSessionsResult.data) {
-      return successResponse({ teamScore: 0 });
+    if (!member) {
+      return errorResponse("파티에 참가하지 않았습니다", 403);
     }
 
-    const teamScore = gameSessionsResult.data.reduce(
-      (sum: number, session: { team_score: number }) => sum + (session.team_score || 0),
-      0,
-    );
+    // party_ruleset 조회
+    const rulesetResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("party_ruleset")
+        .select("id, party_id, level_points")
+        .eq("party_id", partyId)
+        .single();
+    });
 
-    return successResponse({ teamScore });
+    if (!rulesetResult.success || !rulesetResult.data) {
+      return errorResponse("파티 룰셋을 찾을 수 없습니다", 404);
+    }
+
+    return successResponse({
+      level_points: rulesetResult.data.level_points || null,
+    });
   } catch (error) {
-    console.error("팀 점수 조회 에러:", error);
+    console.error("룰셋 조회 에러:", error);
     return errorResponse(error instanceof Error ? error.message : "서버 오류가 발생했습니다", 500);
   }
 }

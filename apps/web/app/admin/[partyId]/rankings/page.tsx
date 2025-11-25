@@ -13,7 +13,6 @@ type PersonalRanking = {
   user: {
     id: string;
     nickname: string;
-    email: string | null;
   };
   totalScore: number;
 };
@@ -38,12 +37,13 @@ export default function RankingsPage() {
   const params = useParams();
   const partyId = params?.partyId as string;
 
-  const [personalRankings, setPersonalRankings] = useState<PersonalRanking[]>([]);
+  const [cruxRankings, setCruxRankings] = useState<PersonalRanking[]>([]);
+  const [gripRankings, setGripRankings] = useState<PersonalRanking[]>([]);
   const [teamRankings, setTeamRankings] = useState<TeamRanking[]>([]);
   const [challengeRankings, setChallengeRankings] = useState<ChallengeRanking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"personal" | "team" | "challenge">("personal");
+  const [activeTab, setActiveTab] = useState<"crux" | "grip" | "team" | "challenge">("crux");
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -66,7 +66,8 @@ export default function RankingsPage() {
         throw new Error(result.error || "랭킹을 불러올 수 없습니다");
       }
 
-      setPersonalRankings(result.data.personal || []);
+      setCruxRankings(result.data.crux || []);
+      setGripRankings(result.data.grip || []);
       setTeamRankings(result.data.team || []);
       setChallengeRankings(result.data.challenge || []);
     } catch (err) {
@@ -119,15 +120,26 @@ export default function RankingsPage() {
         {/* 탭 */}
         <div className="flex gap-2 border-b">
           <button
-            onClick={() => setActiveTab("personal")}
+            onClick={() => setActiveTab("crux")}
             className={`px-4 py-2 font-medium ${
-              activeTab === "personal"
+              activeTab === "crux"
                 ? "border-b-2 border-primary text-primary"
                 : "text-muted-foreground"
             }`}
           >
             <Trophy className="h-4 w-4 inline mr-2" />
-            개인 랭킹
+            Crux 랭킹
+          </button>
+          <button
+            onClick={() => setActiveTab("grip")}
+            className={`px-4 py-2 font-medium ${
+              activeTab === "grip"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            <Trophy className="h-4 w-4 inline mr-2" />
+            Grip 랭킹
           </button>
           <button
             onClick={() => setActiveTab("team")}
@@ -152,20 +164,20 @@ export default function RankingsPage() {
           </button>
         </div>
 
-        {/* 개인 랭킹 */}
-        {activeTab === "personal" && (
+        {/* Crux 랭킹 */}
+        {activeTab === "crux" && (
           <Card>
             <CardHeader>
-              <CardTitle>개인 랭킹</CardTitle>
+              <CardTitle>Crux 랭킹</CardTitle>
             </CardHeader>
             <CardContent>
-              {personalRankings.length === 0 ? (
+              {cruxRankings.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
-                  랭킹 데이터가 없습니다.
+                  Crux 그룹 랭킹 데이터가 없습니다.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {personalRankings.map((ranking) => (
+                  {cruxRankings.map((ranking) => (
                     <div
                       key={ranking.user.id}
                       className="flex items-center justify-between p-4 border rounded-lg"
@@ -186,7 +198,51 @@ export default function RankingsPage() {
                         </div>
                         <div>
                           <div className="font-semibold">{ranking.user.nickname}</div>
-                          <div className="text-sm text-muted-foreground">{ranking.user.email}</div>
+                        </div>
+                      </div>
+                      <div className="text-lg font-bold">{ranking.totalScore}점</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Grip 랭킹 */}
+        {activeTab === "grip" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Grip 랭킹</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {gripRankings.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  Grip 그룹 랭킹 데이터가 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {gripRankings.map((ranking) => (
+                    <div
+                      key={ranking.user.id}
+                      className="flex items-center justify-between p-4 border rounded-lg"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                            ranking.rank === 1
+                              ? "bg-yellow-500 text-white"
+                              : ranking.rank === 2
+                                ? "bg-gray-400 text-white"
+                                : ranking.rank === 3
+                                  ? "bg-orange-600 text-white"
+                                  : "bg-muted"
+                          }`}
+                        >
+                          {ranking.rank}
+                        </div>
+                        <div>
+                          <div className="font-semibold">{ranking.user.nickname}</div>
                         </div>
                       </div>
                       <div className="text-lg font-bold">{ranking.totalScore}점</div>

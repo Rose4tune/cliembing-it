@@ -197,6 +197,40 @@ export async function PATCH(
       return errorResponse("멤버 정보를 업데이트할 수 없습니다", 500);
     }
 
+    // 레벨이 지정된 경우 user_total_scores에 0점 레코드 생성 (그룹에 속한 경우만) 및 랭킹 재계산
+    if (level !== undefined && level) {
+      const { getLevelGroup, calculateAllRankings } = await import("@pkg/shared");
+      const userLevelGroup = getLevelGroup(level as any);
+
+      if (userLevelGroup) {
+        // 그룹에 속한 레벨이면 user_total_scores에 0점 레코드 생성
+        await executeSupabaseQuery(async () => {
+          return await supabase.from("user_total_scores").upsert(
+            {
+              party_id: partyId,
+              user_id: userId,
+              total_score: 0,
+              approved_problem_counts: {},
+              last_calculated_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            {
+              onConflict: "party_id,user_id",
+            },
+          );
+        });
+
+        // 랭킹 재계산 (비동기, 응답을 기다리지 않음)
+        import("@pkg/shared")
+          .then(({ calculateAllRankings }) => {
+            return calculateAllRankings(supabase, partyId);
+          })
+          .catch((error) => {
+            console.error("랭킹 재계산 실패:", error);
+          });
+      }
+    }
+
     // team_id가 변경된 경우 team_members 테이블 동기화 및 승인된 점수 취소
     if (teamId !== undefined && existingTeamId !== teamId) {
       // 팀 배정이 변경되면 이전까지의 승인된 점수를 전부 취소 (approved = NULL로 변경)

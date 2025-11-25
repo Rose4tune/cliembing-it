@@ -66,55 +66,95 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
 
     const party = partyResult.data;
 
-    // rankings 테이블에서 랭킹 조회 (캐시된 랭킹)
-    const rankingsResult = await executeSupabaseQuery(async () => {
-      return await supabase
-        .from("rankings")
-        .select("type, result, computed_at, updated_at")
-        .eq("party_id", partyId);
-    });
-
-    // rankings 테이블에서 그룹별 랭킹 조회
+    // Supabase SQL 함수로 그룹별 랭킹 계산 (점수 높은 순으로 정렬)
     let cruxRankings: any[] = [];
     let gripRankings: any[] = [];
     let teamRankings: any[] = [];
-    let challengeRankings: any[] = [];
+    const challengeRankings: any[] = [];
 
-    if (rankingsResult.success && rankingsResult.data) {
-      rankingsResult.data.forEach((ranking: any) => {
-        if (ranking.type === "crux") {
-          cruxRankings = ranking.result || [];
-        } else if (ranking.type === "grip") {
-          gripRankings = ranking.result || [];
-        } else if (ranking.type === "team") {
-          teamRankings = ranking.result || [];
-        } else if (ranking.type === "challenge") {
-          challengeRankings = ranking.result || [];
-        }
+    // Crux 그룹 랭킹 조회 (SQL 함수 사용)
+    const cruxResult = await executeSupabaseQuery(async () => {
+      return await supabase.rpc("get_crux_rankings", {
+        p_party_id: partyId,
       });
+    });
+
+    if (cruxResult.success && cruxResult.data) {
+      cruxRankings = cruxResult.data.map((item: any) => ({
+        userId: item.user_id,
+        nickname: item.nickname,
+        teamId: item.team_id,
+        teamName: item.team_name,
+        totalScore: item.total_score || 0,
+        rank: item.rank,
+      }));
     }
 
-    // 그룹별 랭킹이 없으면 실시간 계산은 하지 않음 (워커가 처리)
-    // 여기서는 캐시된 랭킹만 반환
-    const personalRankings = [...cruxRankings, ...gripRankings].sort(
-      (a, b) => b.totalScore - a.totalScore,
-    );
+    // Grip 그룹 랭킹 조회 (SQL 함수 사용)
+    const gripResult = await executeSupabaseQuery(async () => {
+      return await supabase.rpc("get_grip_rankings", {
+        p_party_id: partyId,
+      });
+    });
 
-    // 기존 실시간 계산 로직은 제거됨 (워커가 처리)
+    if (gripResult.success && gripResult.data) {
+      gripRankings = gripResult.data.map((item: any) => ({
+        userId: item.user_id,
+        nickname: item.nickname,
+        teamId: item.team_id,
+        teamName: item.team_name,
+        totalScore: item.total_score || 0,
+        rank: item.rank,
+      }));
+    }
 
-    // 팀 랭킹이 없으면 실시간 계산
+    // 개인 랭킹 (Crux + Grip 합쳐서 정렬) - SQL 함수 결과를 합치기만 함
+    const personalRankings = [...cruxRankings, ...gripRankings]
+      .sort((a, b) => b.totalScore - a.totalScore)
+      .map((item, index) => ({
+        ...item,
+        rank: index + 1, // 전체 개인 랭킹 순위 재계산
+      }));
+
+    // 팀 랭킹이 없으면 game_sessions에서 계산
     if (teamRankings.length === 0) {
+      // 모든 팀 조회
       const teamsResult = await executeSupabaseQuery(async () => {
-        return await supabase.from("teams").select("id, name, score").eq("party_id", partyId);
+        return await supabase.from("teams").select("id, name").eq("party_id", partyId);
       });
 
       if (teamsResult.success && teamsResult.data) {
-        teamRankings = teamsResult.data
-          .map((team: any) => ({
-            teamId: team.id,
-            teamName: team.name,
-            totalScore: team.score || 0,
-          }))
+        // 각 팀의 테트리스 게임 점수 합산
+        const teamScoresPromises = teamsResult.data.map(
+          async (team: { id: string; name: string }) => {
+            const gameSessionsResult = await executeSupabaseQuery(async () => {
+              return await supabase
+                .from("game_sessions")
+                .select("team_score")
+                .eq("party_id", partyId)
+                .eq("team_id", team.id)
+                .eq("status", "finished");
+            });
+
+            const totalScore =
+              gameSessionsResult.success && gameSessionsResult.data
+                ? gameSessionsResult.data.reduce(
+                    (sum: number, session: { team_score: number }) =>
+                      sum + (session.team_score || 0),
+                    0,
+                  )
+                : 0;
+
+            return {
+              teamId: team.id,
+              teamName: team.name,
+              totalScore,
+            };
+          },
+        );
+
+        const teamScores = await Promise.all(teamScoresPromises);
+        teamRankings = teamScores
           .sort((a, b) => b.totalScore - a.totalScore)
           .map((item, index) => ({
             ...item,
