@@ -170,7 +170,7 @@ export function TetrisBoard({
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-4">
       {/* 게임 보드 */}
       <div className="relative bg-gray-900 rounded-lg p-2 border-2 border-gray-700 flex-5">
         <div className="grid" style={{ gridTemplateColumns: `repeat(${BOARD_WIDTH}, 1fr)` }}>
@@ -204,23 +204,21 @@ export function TetrisBoard({
       </div>
 
       {/* 대기 중인 블럭 영역 */}
-      {nextPieces.length > 0 && (
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 flex-1">
-          <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
-            {nextPieces.map((piece, index) => (
-              <div
-                key={index}
-                className={cn(
-                  "aspect-square rounded-sm border",
-                  "flex items-center justify-center shrink-0 min-h-12",
-                )}
-              >
-                {piece && getBlockPreview(piece, index)}
-              </div>
-            ))}
-          </div>
+      <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 flex-1">
+        <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
+          {nextPieces.map((piece, index) => (
+            <div
+              key={index}
+              className={cn(
+                "aspect-square rounded-sm border",
+                "flex items-center justify-center shrink-0 min-h-12",
+              )}
+            >
+              {piece && getBlockPreview(piece, index)}
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }

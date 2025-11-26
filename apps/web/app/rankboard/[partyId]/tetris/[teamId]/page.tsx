@@ -62,6 +62,7 @@ export default function TetrisPage() {
   const [userLevel, setUserLevel] = useState<string>("");
   const [userTeam, setUserTeam] = useState<string>("");
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
+  const [isLeader, setIsLeader] = useState<boolean>(false);
   const [teamRankings, setTeamRankings] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,12 +85,13 @@ export default function TetrisPage() {
           setParty(partyResult.data);
         }
 
-        // 사용자 파티 멤버 정보 조회 (레벨, 팀)
+        // 사용자 파티 멤버 정보 조회 (레벨, 팀, 팀장 여부)
         const memberResponse = await fetch(`/api/party/${partyId}/member`);
         const memberResult = await memberResponse.json();
         if (memberResponse.ok && memberResult.success) {
           setUserLevel(memberResult.data.level || "");
           setUserTeam(memberResult.data.team_name || "");
+          setIsLeader(memberResult.data.is_leader || false);
           const memberTeamId = memberResult.data.team_id;
 
           if (!memberTeamId) {
@@ -123,50 +125,68 @@ export default function TetrisPage() {
             setTeamTotalScore(teamScoreResult.data.teamScore || 0);
           }
 
-          // 팀의 획득한 블럭 조회 (team_block_events에서)
-          const blocksResponse = await fetch(
-            `/api/party/${partyId}/team-blocks?teamId=${currentTeamId}`,
-          );
-          if (blocksResponse.ok) {
-            const blocksResult = await blocksResponse.json();
-            if (blocksResult.success && blocksResult.data?.blocks) {
-              // block_type을 BlockColor로 변환
-              const blocks: BlockColor[] = blocksResult.data.blocks.map(
-                (block: { block_type: string }) => {
-                  // block_type을 BlockColor로 매핑
-                  const blockTypeMap: Record<string, BlockColor> = {
-                    special: "special",
-                    S: "red",
-                    I: "purple",
-                    "L-right": "orange",
-                    T: "blue",
-                    Z: "green",
-                    "L-left": "yellow",
-                    O: "pink",
-                  };
-                  return blockTypeMap[block.block_type] || null;
-                },
-              );
-              setRemainingPieces(blocks);
-            }
-          }
-
           // 게임 세션 조회 (있는 경우)
+          let gameSessionData: any = null;
           const gameSessionResponse = await fetch(
             `/api/party/${partyId}/game-session?teamId=${currentTeamId}`,
           );
           if (gameSessionResponse.ok) {
             const gameSessionResult = await gameSessionResponse.json();
             if (gameSessionResult.success && gameSessionResult.data) {
+              gameSessionData = gameSessionResult.data;
               const session = gameSessionResult.data;
               setGameState((session.status as GameState) || "idle");
               if (session.board_state) {
                 setBoard(session.board_state);
               }
-              if (session.current_pieces) {
-                setRemainingPieces(session.current_pieces);
-              }
               setCompletedLines(session.completed_lines || 0);
+            }
+          }
+
+          // 게임이 진행 중이 아닐 때만 전체 블럭 조회 (게임 진행 중이면 게임 세션의 블럭 사용)
+          if (!gameSessionData || gameSessionData.status !== "running") {
+            // 팀의 획득한 블럭 조회 (team_block_events에서)
+            const blocksResponse = await fetch(
+              `/api/party/${partyId}/team-blocks?teamId=${currentTeamId}`,
+            );
+            if (blocksResponse.ok) {
+              const blocksResult = await blocksResponse.json();
+              console.log("블럭 조회 결과:", blocksResult); // 디버깅용
+              if (blocksResult.success && blocksResult.data?.blocks) {
+                console.log("블럭 데이터:", blocksResult.data.blocks); // 디버깅용
+                // block_type을 BlockColor로 변환
+                const blocks: BlockColor[] = blocksResult.data.blocks
+                  .map((block: { block_type: string }) => {
+                    // block_type을 BlockColor로 매핑
+                    const blockTypeMap: Record<string, BlockColor> = {
+                      special: "special",
+                      S: "red",
+                      I: "purple",
+                      "L-right": "orange",
+                      T: "blue",
+                      Z: "green",
+                      "L-left": "yellow",
+                      O: "pink",
+                    };
+                    const color = blockTypeMap[block.block_type] || null;
+                    if (!color) {
+                      console.warn("알 수 없는 블럭 타입:", block.block_type);
+                    }
+                    return color;
+                  })
+                  .filter((block: BlockColor | null) => block !== null); // null 제거
+                console.log("변환된 블럭:", blocks); // 디버깅용
+                setRemainingPieces(blocks);
+              } else {
+                console.warn("블럭 데이터가 없습니다:", blocksResult);
+              }
+            } else {
+              console.error("블럭 조회 실패:", await blocksResponse.text());
+            }
+          } else {
+            // 게임 진행 중이면 게임 세션의 블럭 사용
+            if (gameSessionData.current_pieces) {
+              setRemainingPieces(gameSessionData.current_pieces);
             }
           }
         }
@@ -203,14 +223,38 @@ export default function TetrisPage() {
   }, [party?.end_at]);
 
   // 게임 시작 요청
-  const handleRequestGameStart = () => {
+  const handleRequestGameStart = async () => {
     if (acquiredPieces === 0) {
       alert("게임 대기에 추가된 블럭이 없습니다.");
       return;
     }
-    setGameState("requested");
-    // TODO: API 호출로 스탭에게 요청 전달
-    console.log("게임 시작 요청 전송");
+
+    if (!partyId || !teamId) return;
+
+    try {
+      // 관리자에게 게임 시작 요청 (status='pending'으로 게임 세션 생성)
+      const response = await fetch(`/api/party/${partyId}/game-session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          teamId,
+          action: "request", // 팀장이 게임 시작 요청
+        }),
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setGameState("requested");
+        alert("게임 시작 요청이 전송되었습니다. 관리자 승인을 기다려주세요.");
+      } else {
+        alert(result.error || "게임 시작 요청에 실패했습니다");
+      }
+    } catch (error) {
+      console.error("게임 시작 요청 에러:", error);
+      alert("게임 시작 요청에 실패했습니다");
+    }
   };
 
   // 게임 시작 확인 (스탭이 확인한 경우)
@@ -414,14 +458,6 @@ export default function TetrisPage() {
       />
 
       <main className="flex-1 container max-w-lg mx-auto px-4 py-6 space-y-6 pb-24">
-        {/* 팀 게임 현황 */}
-        <TeamGameStatusCard
-          teamTotalScore={teamTotalScore}
-          completedLines={completedLines}
-          acquiredPieces={acquiredPieces}
-          timeRemaining={gameState === "playing" ? timeRemaining : undefined}
-        />
-
         {/* 테트리스 게임 보드 */}
         <div className="space-y-4">
           <TetrisBoard
@@ -433,20 +469,27 @@ export default function TetrisPage() {
 
           {/* 게임 시작 버튼 또는 게임 컨트롤 */}
           {gameState === "idle" || gameState === "finished" ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="primary"
-                size="lg"
-                className="flex-2"
-                onClick={handleRequestGameStart}
-                disabled={acquiredPieces === 0}
-              >
-                게임 시작 요청하기
-              </Button>
+            <div className="flex items-center gap-4">
+              {isLeader && (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="flex-4 p-0"
+                  onClick={handleRequestGameStart}
+                  disabled={acquiredPieces === 0}
+                >
+                  게임 시작 요청하기
+                </Button>
+              )}
+              {!isLeader && (
+                <div className="flex-4 text-center text-muted-foreground text-sm py-3">
+                  팀장만 게임 시작을 요청할 수 있습니다
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="shrink-0"
+                className="flex-1"
                 onClick={() => setShowGameRules(!showGameRules)}
                 aria-label="게임 규칙 보기"
               >
@@ -511,6 +554,14 @@ export default function TetrisPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* 팀 게임 현황 */}
+        <TeamGameStatusCard
+          teamTotalScore={teamTotalScore}
+          completedLines={completedLines}
+          acquiredPieces={acquiredPieces}
+          timeRemaining={gameState === "playing" ? timeRemaining : undefined}
+        />
 
         {/* 실시간 팀 랭킹 */}
         <TeamRanking teams={teamRankings.length > 0 ? teamRankings : []} />

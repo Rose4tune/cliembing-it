@@ -25,7 +25,8 @@ type ScoreApproval = {
 
 type GameRequest = {
   id: string;
-  team_number: number;
+  team_id: string;
+  team_name: string;
   status: string;
   requested_at: string;
 };
@@ -98,6 +99,33 @@ export default function ApprovalsPage() {
     } catch (err) {
       console.error("승인 상태 업데이트 에러:", err);
       alert(err instanceof Error ? err.message : "승인 상태 업데이트에 실패했습니다");
+    }
+  };
+
+  const handleGameRequest = async (gameSessionId: string, approved: boolean) => {
+    try {
+      const response = await fetch(`/api/admin/${partyId}/approvals`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameSessionId,
+          action: approved ? "approve_game" : "reject_game",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "게임 요청 승인/거부에 실패했습니다");
+      }
+
+      fetchApprovals();
+      // alert(approved ? "게임 요청이 승인되었습니다." : "게임 요청이 거부되었습니다.");
+    } catch (err) {
+      console.error("게임 요청 승인/거부 에러:", err);
+      alert(err instanceof Error ? err.message : "게임 요청 승인/거부에 실패했습니다");
     }
   };
 
@@ -248,20 +276,28 @@ export default function ApprovalsPage() {
                   <Card key={request.id} className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="font-semibold">{request.team_number}조</div>
+                        <div className="font-semibold">{request.team_name}</div>
                         <div className="text-sm text-muted-foreground mt-1">
-                          상태: {request.status}
+                          상태: {request.status === "pending" ? "승인 대기" : request.status}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
-                          {new Date(request.requested_at).toLocaleString("ko-KR")}
+                          요청 시간: {new Date(request.requested_at).toLocaleString("ko-KR")}
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="primary" size="sm">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleGameRequest(request.id, true)}
+                        >
                           <CheckCircle className="h-4 w-4 mr-1" />
                           승인
                         </Button>
-                        <Button variant="destructive" size="sm">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleGameRequest(request.id, false)}
+                        >
                           <XCircle className="h-4 w-4 mr-1" />
                           거부
                         </Button>

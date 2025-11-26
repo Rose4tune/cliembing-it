@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Home, LayoutDashboard, PlusCircle, Blocks } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
@@ -9,10 +10,37 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
 };
 
 export function RankboardFooterNavigation({ partyId }: { partyId?: string }) {
   const pathname = usePathname();
+  const [teamTetrisHref, setTeamTetrisHref] = useState<string | null>(null);
+
+  // 팀 ID 조회 (테트리스 링크용)
+  useEffect(() => {
+    if (!partyId) {
+      return;
+    }
+
+    const fetchTeamId = async () => {
+      try {
+        const memberResponse = await fetch(`/api/party/${partyId}/member`);
+        const memberResult = await memberResponse.json();
+        if (memberResponse.ok && memberResult.success && memberResult.data?.team_id) {
+          setTeamTetrisHref(`/rankboard/${partyId}/tetris/${memberResult.data.team_id}`);
+        } else {
+          // 팀에 속하지 않은 경우 기본 경로 사용
+          setTeamTetrisHref(`/rankboard/${partyId}/tetris`);
+        }
+      } catch (error) {
+        console.error("팀 ID 조회 실패:", error);
+        setTeamTetrisHref(`/rankboard/${partyId}/tetris`);
+      }
+    };
+
+    fetchTeamId();
+  }, [partyId]);
 
   // partyId가 있으면 동적 경로 사용
   const navItems: NavItem[] = partyId
@@ -33,7 +61,7 @@ export function RankboardFooterNavigation({ partyId }: { partyId?: string }) {
           icon: PlusCircle,
         },
         {
-          href: `/rankboard/${partyId}/tetris`,
+          href: teamTetrisHref || `/rankboard/${partyId}/tetris`,
           label: "테트리스",
           icon: Blocks,
         },
@@ -66,7 +94,9 @@ export function RankboardFooterNavigation({ partyId }: { partyId?: string }) {
       <div className="container mx-auto flex items-center justify-around px-4">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          // 테트리스 링크는 동적으로 변경될 수 있으므로 pathname이 tetris로 시작하는지 확인
+          const isActive =
+            item.label === "테트리스" ? pathname?.includes("/tetris/") : pathname === item.href;
 
           return (
             <Link

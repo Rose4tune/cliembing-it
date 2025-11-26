@@ -14,12 +14,22 @@ import { getLevelAbove } from "../level";
  * @param solvedLevel 풀이한 레벨
  * @param submissionId 점수 제출 ID (team_block_events.submission_id)
  */
+/**
+ * 블럭 획득 조건 확인 및 블럭 추가
+ * @param supabase Supabase 클라이언트
+ * @param partyId 파티 ID
+ * @param userId 사용자 ID
+ * @param solvedLevel 풀이한 레벨
+ * @param submissionId 점수 제출 ID (level_scores.id)
+ * @param problemCount 문제 개수 (블럭 개수 결정)
+ */
 export async function addBlockForScoreApproval(
   supabase: SupabaseClient,
   partyId: string,
   userId: string,
   solvedLevel: ClimbingLevel,
   submissionId?: string | null,
+  problemCount: number = 1,
 ): Promise<{
   success: boolean;
   blockAdded?: boolean;
@@ -149,16 +159,18 @@ export async function addBlockForScoreApproval(
       };
     }
 
-    // 6. team_block_events에 블럭 추가
+    // 6. team_block_events에 블럭 추가 (problem_count만큼)
+    // 동일 레벨 2개 이상 승인 시 동일 블럭 2개 이상 스택에 쌓임
     const { error: insertError } = await supabase
       .from("team_block_events")
       .insert({
         party_id: partyId,
         team_id: teamId,
         submission_id: submissionId || null,
-        source: "score_approval",
+        source: "solve", // enum 값: solve, height_threshold, line_clear
         block_type: blockTypeName,
-        value: 1, // 블럭 1개 추가
+        value: problemCount, // 문제 개수만큼 블럭 추가
+        game_session_id: null, // 게임 시작 전이므로 null
       });
 
     if (insertError) {

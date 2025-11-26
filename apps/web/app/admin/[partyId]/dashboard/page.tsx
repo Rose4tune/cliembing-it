@@ -13,7 +13,7 @@ import {
   type PartyStatus,
   type Party,
 } from "@pkg/shared";
-import { Calendar, Users, FileText, Code } from "lucide-react";
+import { Calendar, Users, FileText, Code, Play, Pause } from "lucide-react";
 import { useViewMode } from "../../../contexts/ViewModeContext";
 
 export default function AdminDashboardPage() {
@@ -27,6 +27,9 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
+  const [teams, setTeams] = useState<
+    Array<{ id: string; name: string; gameSessionStatus?: string }>
+  >([]);
 
   // 인증 및 권한 체크
   useEffect(() => {
@@ -136,6 +139,57 @@ export default function AdminDashboardPage() {
 
     fetchParty();
   }, [partyId, status, hasAccess]);
+
+  // 팀 목록 및 게임 세션 상태 조회
+  useEffect(() => {
+    if (!partyId || status !== "authenticated" || !hasAccess || party?.status !== "running") return;
+
+    const fetchTeamsAndGames = async () => {
+      try {
+        // 팀 목록 조회
+        const teamsResponse = await fetch(`/api/admin/${partyId}/teams`);
+        const teamsResult = await teamsResponse.json();
+
+        if (teamsResponse.ok && teamsResult.success && teamsResult.data) {
+          const teamsData = teamsResult.data;
+
+          // 각 팀의 게임 세션 상태 조회
+          const teamsWithGameStatus = await Promise.all(
+            teamsData.map(async (team: any) => {
+              try {
+                const gameResponse = await fetch(
+                  `/api/party/${partyId}/game-session?teamId=${team.id}`,
+                );
+                const gameResult = await gameResponse.json();
+
+                return {
+                  id: team.id,
+                  name: team.name,
+                  gameSessionStatus:
+                    gameResult.success && gameResult.data ? gameResult.data.status : null,
+                };
+              } catch {
+                return {
+                  id: team.id,
+                  name: team.name,
+                  gameSessionStatus: null,
+                };
+              }
+            }),
+          );
+
+          setTeams(teamsWithGameStatus);
+        }
+      } catch (err) {
+        console.error("팀 및 게임 상태 조회 에러:", err);
+      }
+    };
+
+    fetchTeamsAndGames();
+    // 주기적으로 업데이트 (30초마다)
+    const interval = setInterval(fetchTeamsAndGames, 30000);
+    return () => clearInterval(interval);
+  }, [partyId, status, hasAccess, party?.status]);
 
   const handleStatusChange = async (newStatus: PartyStatus) => {
     if (!partyId) return;
@@ -340,6 +394,63 @@ export default function AdminDashboardPage() {
             )}
           </CardFooter>
         </Card>
+
+        {/* 팀 게임 상태 카드 */}
+        {party.status === "running" && (
+          <Card className="max-w-[600px]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Play className="h-5 w-5" />팀 게임 상태
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm text-muted-foreground mb-4">
+                게임 시작 요청은 <strong>승인 관리</strong> 페이지에서 승인할 수 있습니다.
+              </div>
+              {teams.length === 0 ? (
+                <div className="text-center text-muted-foreground py-4">팀이 없습니다.</div>
+              ) : (
+                <div className="space-y-3">
+                  {teams.map((team) => {
+                    const gameStatus = team.gameSessionStatus;
+                    const isGamePending = gameStatus === "pending";
+                    const isGameRunning = gameStatus === "running";
+                    const isGameFinished = gameStatus === "finished";
+
+                    return (
+                      <div
+                        key={team.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div>
+                          <div className="font-medium">{team.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {isGamePending && "게임 시작 요청 대기 중 (승인 관리에서 승인 가능)"}
+                            {isGameRunning && "게임 진행 중"}
+                            {isGameFinished && "게임 완료"}
+                            {!gameStatus && "게임 시작 가능"}
+                          </div>
+                        </div>
+                        {isGamePending && (
+                          <span className="text-sm text-yellow-600 font-semibold">승인 대기</span>
+                        )}
+                        {isGameRunning && (
+                          <span className="text-sm text-green-600 font-semibold">진행 중</span>
+                        )}
+                        {isGameFinished && (
+                          <span className="text-sm text-blue-600 font-semibold">완료</span>
+                        )}
+                        {!gameStatus && (
+                          <span className="text-sm text-muted-foreground">대기 중</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );

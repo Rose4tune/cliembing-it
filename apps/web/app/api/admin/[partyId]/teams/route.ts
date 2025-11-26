@@ -21,11 +21,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const { partyId } = await params;
     const supabase = createAdminClient();
 
-    // 파티의 팀 목록 조회 (멤버 수 포함)
+    // 파티의 팀 목록 조회 (leader_id 포함)
     const result = await executeSupabaseQuery(async () => {
       return await supabase
         .from("teams")
-        .select("id, name, color, score")
+        .select("id, name, color, score, leader_id")
         .eq("party_id", partyId)
         .order("name", { ascending: true });
     });
@@ -34,9 +34,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return successResponse([]);
     }
 
-    // 각 팀의 멤버 수 조회
-    const teamsWithMemberCount = await Promise.all(
+    // 각 팀의 멤버 수 및 멤버 목록 조회
+    const teamsWithMembers = await Promise.all(
       result.data.map(async (team: any) => {
+        // 멤버 수 조회
         const memberCountResult = await executeSupabaseQuery(async () => {
           const { count, error } = await supabase
             .from("team_members")
@@ -46,12 +47,34 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
           return { data: count, error };
         });
 
+        // 멤버 목록 조회 (팀장 설정용)
+        const membersResult = await executeSupabaseQuery(async () => {
+          return await supabase
+            .from("team_members")
+            .select(
+              `
+              user_id,
+              users:user_id(id, nickname)
+            `,
+            )
+            .eq("team_id", team.id);
+        });
+
+        const members =
+          membersResult.success && membersResult.data
+            ? membersResult.data.map((m: any) => ({
+                id: m.user_id,
+                nickname: m.users?.nickname || "알 수 없음",
+              }))
+            : [];
+
         return {
           ...team,
           memberCount:
             memberCountResult.success && memberCountResult.data !== null
               ? memberCountResult.data
               : 0,
+          members,
         };
       }),
     );
@@ -61,7 +84,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return errorResponse(result.error?.message || "팀 목록을 불러올 수 없습니다", 500);
     }
 
-    return successResponse(teamsWithMemberCount);
+    return successResponse(teamsWithMembers);
   } catch (error) {
     console.error("팀 목록 조회 에러:", error);
     return errorResponse(error instanceof Error ? error.message : "서버 오류가 발생했습니다", 500);
@@ -141,7 +164,7 @@ export async function PATCH(
 
     const { partyId } = await params;
     const body = await request.json();
-    const { teamId, name, color } = body;
+    const { teamId, name, color, leaderId } = body;
 
     if (!teamId) {
       return errorResponse("팀 ID가 필요합니다", 400);
@@ -149,12 +172,20 @@ export async function PATCH(
 
     const supabase = createAdminClient();
 
-    const updateData: { name?: string; color?: string | null } = {};
+    const updateData: {
+      name?: string;
+      color?: string | null;
+      leader_id?: string | null;
+    } = {};
     if (name !== undefined) {
       updateData.name = name;
     }
     if (color !== undefined) {
       updateData.color = color || null;
+    }
+    if (leaderId !== undefined) {
+      // leaderId가 빈 문자열이거나 null이면 null로 설정
+      updateData.leader_id = leaderId || null;
     }
 
     const result = await executeSupabaseQuery(async () => {

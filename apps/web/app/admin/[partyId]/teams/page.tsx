@@ -10,12 +10,19 @@ import { Button } from "@pkg/ui-web";
 import { Input } from "@pkg/ui-web";
 import { Users, Plus, Edit, Trash2 } from "lucide-react";
 
+type TeamMember = {
+  id: string;
+  nickname: string;
+};
+
 type Team = {
   id: string;
   name: string;
   color: string | null;
   score: number;
   memberCount: number;
+  leader_id: string | null;
+  members: TeamMember[];
 };
 
 export default function TeamsManagementPage() {
@@ -30,6 +37,7 @@ export default function TeamsManagementPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTeam, setEditingTeam] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: "", color: "" });
+  const [updatingLeaderId, setUpdatingLeaderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -165,6 +173,35 @@ export default function TeamsManagementPage() {
     setFormData({ name: "", color: "" });
   };
 
+  const handleLeaderChange = async (teamId: string, leaderId: string | null) => {
+    try {
+      setUpdatingLeaderId(teamId);
+      const response = await fetch(`/api/admin/${partyId}/teams`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          teamId,
+          leaderId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "팀장 설정에 실패했습니다");
+      }
+
+      fetchTeams();
+    } catch (err) {
+      console.error("팀장 설정 에러:", err);
+      alert(err instanceof Error ? err.message : "팀장 설정에 실패했습니다");
+    } finally {
+      setUpdatingLeaderId(null);
+    }
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center ml-20">
@@ -228,6 +265,7 @@ export default function TeamsManagementPage() {
                         <th className="text-left p-3 font-semibold">색상</th>
                         <th className="text-right p-3 font-semibold">점수</th>
                         <th className="text-right p-3 font-semibold">멤버 수</th>
+                        <th className="text-left p-3 font-semibold">팀장</th>
                         <th className="text-center p-3 font-semibold">작업</th>
                       </tr>
                     </thead>
@@ -245,6 +283,24 @@ export default function TeamsManagementPage() {
                           </td>
                           <td className="p-3 text-right">{team.score}</td>
                           <td className="p-3 text-right">{team.memberCount}</td>
+                          <td className="p-3">
+                            <select
+                              value={team.leader_id || ""}
+                              onChange={(e) => handleLeaderChange(team.id, e.target.value || null)}
+                              disabled={updatingLeaderId === team.id || team.memberCount === 0}
+                              className="w-full min-w-[120px] px-2 py-1 text-sm border rounded-md bg-background disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <option value="">팀장 없음</option>
+                              {team.members.map((member) => (
+                                <option key={member.id} value={member.id}>
+                                  {member.nickname}
+                                </option>
+                              ))}
+                            </select>
+                            {updatingLeaderId === team.id && (
+                              <span className="text-xs text-muted-foreground ml-2">저장 중...</span>
+                            )}
+                          </td>
                           <td className="p-3">
                             <div className="flex gap-2 justify-center">
                               <Button

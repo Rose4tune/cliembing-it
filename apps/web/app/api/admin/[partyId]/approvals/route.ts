@@ -209,9 +209,38 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         .order("updated_at", { ascending: false });
     });
 
-    // 게임 요청 목록 조회
-    // TODO: game_requests 테이블이 생성되면 해당 테이블 조회
-    const gameRequests: any[] = [];
+    // 게임 요청 목록 조회 (game_sessions에서 status='pending'인 것만)
+    const gameRequestsResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("game_sessions")
+        .select(
+          `
+          id,
+          team_id,
+          status,
+          created_at,
+          started_at,
+          teams:team_id (
+            id,
+            name
+          )
+        `,
+        )
+        .eq("party_id", partyId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+    });
+
+    const gameRequests =
+      gameRequestsResult.success && gameRequestsResult.data
+        ? gameRequestsResult.data.map((gs: any) => ({
+            id: gs.id,
+            team_id: gs.team_id,
+            team_name: gs.teams?.name || "알 수 없음",
+            status: gs.status,
+            requested_at: gs.created_at,
+          }))
+        : [];
 
     return successResponse({
       scores: scoresResult.success ? scoresResult.data || [] : [],
@@ -242,8 +271,62 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
 
     const { partyId } = await params;
     const body = await request.json();
-    const { scoreId, approved } = body;
+    const { scoreId, approved, gameSessionId, action } = body;
 
+    // 게임 요청 승인/거부 처리
+    if (action === "approve_game" || action === "reject_game") {
+      if (!gameSessionId) {
+        return errorResponse("게임 세션 ID가 필요합니다", 400);
+      }
+
+      const supabase = createAdminClient();
+
+      // 게임 세션 상태 업데이트
+      const newStatus = action === "approve_game" ? "running" : "cancelled";
+      const adminUserId = session.user.id;
+
+      const updateData: {
+        status: string;
+        started_at?: string;
+        started_by_admin_id?: string;
+        updated_at: string;
+      } = {
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (action === "approve_game") {
+        updateData.started_at = new Date().toISOString();
+        updateData.started_by_admin_id = adminUserId; // 승인한 관리자 ID로 업데이트
+      }
+
+      const gameSessionResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("game_sessions")
+          .update(updateData)
+          .eq("id", gameSessionId)
+          .eq("party_id", partyId)
+          .eq("status", "pending") // pending 상태인 것만 업데이트
+          .select()
+          .single();
+      });
+
+      if (!gameSessionResult.success || !gameSessionResult.data) {
+        return errorResponse(
+          gameSessionResult.error?.message || "게임 요청 승인/거부에 실패했습니다",
+          500,
+        );
+      }
+
+      return successResponse({
+        gameSessionId,
+        status: newStatus,
+        message:
+          action === "approve_game" ? "게임 요청이 승인되었습니다" : "게임 요청이 거부되었습니다",
+      });
+    }
+
+    // 점수 승인 처리 (기존 로직)
     if (!scoreId || approved === undefined) {
       return errorResponse("점수 ID와 승인 상태가 필요합니다", 400);
     }
@@ -271,7 +354,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     const userId = scoreResult.data.user_id;
     const solvedLevel = scoreResult.data.level as ClimbingLevel;
 
-    // level_scores의 approved 컬럼 업데이트
+    // 승인한 관리자 ID 가져오기
+    const adminUserId = session.user.id;
+
+    // level_scores의 approved, approved_by, approved_at 컬럼 업데이트
+    const updateData: {
+      approved: boolean | null;
+      updated_at: string;
+      approved_by?: string | null;
+      approved_at?: string | null;
+    } = {
+      approved,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (approved === true) {
+      // 승인 시: approved_by, approved_at 설정
+      updateData.approved_by = adminUserId;
+      updateData.approved_at = new Date().toISOString();
+    } else if (approved === false) {
+      // 거절 시: approved_by, approved_at null로 설정
+      updateData.approved_by = null;
+      updateData.approved_at = null;
+    }
+    // approved가 null인 경우 (승인 대기)는 기존 값 유지
+
     const result = await executeSupabaseQuery<{
       id: string;
       level: string;
@@ -280,10 +387,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     }>(async () => {
       return await supabase
         .from("level_scores")
-        .update({
-          approved,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("id", scoreId)
         .eq("party_id", partyId)
         .select("id, level, problem_count, approved")
@@ -319,13 +423,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
         );
       }
 
-      // 2. 블럭 획득 처리
+      // 2. 블럭 획득 처리 (problem_count만큼 블럭 추가)
+      const problemCount = result.data.problem_count || 1;
       const blockResult = await addBlockForScoreApproval(
         supabase,
         partyId,
         userId,
         solvedLevel,
         scoreId,
+        problemCount, // 문제 개수만큼 블럭 추가
       );
       if (!blockResult.success && blockResult.error) {
         console.error("블럭 추가 실패:", blockResult.error);
