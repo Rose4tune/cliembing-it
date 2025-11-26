@@ -31,14 +31,20 @@ export async function POST(request: Request) {
 
     // 3. 요청 데이터 파싱
     const body = await request.json();
-    const { name, description, date, time, location, maxParticipants } = body;
+    const { name, description, date, time, endDate, endTime, location, maxParticipants } = body;
 
-    if (!name || !date || !time || !location) {
+    if (!name || !date || !time || !endDate || !endTime || !location) {
       return errorResponse("필수 항목이 누락되었습니다", 400);
     }
 
     // 4. 날짜/시간 결합
     const startAt = new Date(`${date}T${time}`).toISOString();
+    const endAt = new Date(`${endDate}T${endTime}`).toISOString();
+
+    // 종료 시간이 시작 시간보다 이전이면 에러
+    if (new Date(endAt) <= new Date(startAt)) {
+      return errorResponse("종료 시간은 시작 시간보다 나중이어야 합니다", 400);
+    }
 
     // 5. 파티 코드 생성 (간단한 랜덤 코드)
     const generatePartyCode = () => {
@@ -93,6 +99,7 @@ export async function POST(request: Request) {
           created_by: userId,
           status: "ready", // 초기 상태는 "ready" (대기중)
           start_at: startAt,
+          end_at: endAt, // 종료 시간 (필수)
           total_participants: maxParticipants || null,
           description: description?.trim() || null, // description 추가
         })
