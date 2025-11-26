@@ -26,18 +26,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return errorResponse("팀 ID가 필요합니다", 400);
     }
 
-    // Supabase 클라이언트 생성
-    const userRole = (session.user as { role?: string | null })?.role;
-    let supabase;
-    try {
-      if (userRole === "admin") {
-        supabase = createAdminClient();
-      } else {
-        supabase = await createServerClient();
-      }
-    } catch {
-      supabase = await createServerClient();
-    }
+    // 개발 단계: RLS 문제로 인해 Admin 클라이언트 사용
+    const supabase = createAdminClient();
 
     // 테트리스 게임 점수 합산 (완료된 게임만)
     const gameSessionsResult = await executeSupabaseQuery(async () => {

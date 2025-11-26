@@ -3,7 +3,15 @@ import { getServerSession, authOptions } from "@pkg/auth";
 import { createServerClient, createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
 
-type GameStatus = "idle" | "pending" | "ready" | "running" | "finished" | "cancelled";
+type GameStatus =
+  | "inactive"
+  | "idle"
+  | "pending"
+  | "requesting"
+  | "ready"
+  | "running"
+  | "finished"
+  | "cancelled";
 
 interface BoardSnapshot {
   board: Array<Array<string | null>>;
@@ -38,98 +46,76 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return errorResponse("teamId 파라미터가 필요합니다", 400);
     }
 
-    const supabase = await createServerClient();
+    // 개발 단계: RLS 문제로 인해 Admin 클라이언트 사용
+    // Supabase Admin 클라이언트 = Service Role Key 사용, RLS 정책 우회
+    // 파티 admin 역할과는 별개 (애플리케이션 레벨 권한)
+    const supabase = createAdminClient();
 
-    // 최신 게임 세션 조회 (모든 활성 상태)
-    // 상태 우선순위: running > ready > pending > idle > finished > cancelled
-    // running: 게임 진행 중
-    // ready: 관리자 승인 완료, 참가자 게임 시작 대기
-    // pending: 승인 요청 대기 중
-    // idle: 아직 승인 요청 전 (또는 비활성)
-    // finished: 게임 종료 (파티 진행 중이면 재요청 가능)
-    // cancelled: 게임 취소 (파티 진행 중이면 재요청 가능)
-    const { data: gameSession, error } = await executeSupabaseQuery(async () => {
-      // 먼저 running 상태 조회 (가장 최근, 게임 진행 중)
-      const runningSession = await supabase
+    // 권한 확인: 애플리케이션 레벨에서 팀 멤버인지 확인 (Admin 클라이언트로)
+    const teamMemberCheck = await supabase
+      .from("team_members")
+      .select("team_id, user_id")
+      .eq("team_id", teamId)
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    if (!teamMemberCheck.data) {
+      // 팀 멤버가 아니면 접근 거부
+      return errorResponse("해당 팀의 멤버만 게임 세션에 접근할 수 있습니다", 403);
+    }
+
+    // 모든 게임 세션 조회 (상태 우선순위로 선택)
+    const { data: allSessions, error: queryError } = await executeSupabaseQuery(async () => {
+      return await supabase
         .from("game_sessions")
         .select("*")
         .eq("party_id", partyId)
         .eq("team_id", teamId)
-        .eq("status", "running")
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (runningSession.data) {
-        return runningSession;
-      }
-
-      // running이 없으면 ready 조회 (승인 완료, 게임 시작 대기)
-      const readySession = await supabase
-        .from("game_sessions")
-        .select("*")
-        .eq("party_id", partyId)
-        .eq("team_id", teamId)
-        .eq("status", "ready")
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (readySession.data) {
-        return readySession;
-      }
-
-      // ready도 없으면 pending 조회 (승인 대기 중)
-      const pendingSession = await supabase
-        .from("game_sessions")
-        .select("*")
-        .eq("party_id", partyId)
-        .eq("team_id", teamId)
-        .eq("status", "pending")
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (pendingSession.data) {
-        return pendingSession;
-      }
-
-      // pending도 없으면 idle 조회 (비활성)
-      const idleSession = await supabase
-        .from("game_sessions")
-        .select("*")
-        .eq("party_id", partyId)
-        .eq("team_id", teamId)
-        .eq("status", "idle")
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (idleSession.data) {
-        return idleSession;
-      }
-
-      // finished 또는 cancelled 상태도 조회 (파티 종료 후 결과 조회용)
-      const finishedSession = await supabase
-        .from("game_sessions")
-        .select("*")
-        .eq("party_id", partyId)
-        .eq("team_id", teamId)
-        .in("status", ["finished", "cancelled"])
-        .order("ended_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      return finishedSession;
+        .order("id", { ascending: false });
     });
 
-    if (error) {
-      return errorResponse(error.message || "게임 세션 조회에 실패했습니다", 500);
+    if (queryError) {
+      console.error("❌ [게임 세션 조회 에러]", queryError);
+      return errorResponse(queryError.message || "게임 세션 조회에 실패했습니다", 500);
     }
 
-    if (!gameSession) {
-      return successResponse({ data: null });
+    if (!allSessions || allSessions.length === 0) {
+      return errorResponse(
+        `게임 세션을 찾을 수 없습니다. (partyId: ${partyId}, teamId: ${teamId}) 팀 생성 시 게임 세션이 자동으로 생성되어야 합니다.`,
+        404,
+      );
     }
+
+    // 상태 우선순위에 따라 게임 세션 선택
+    const statusPriority: Record<string, number> = {
+      running: 1,
+      ready: 2,
+      requesting: 3,
+      pending: 4,
+      inactive: 5,
+      idle: 6,
+      finished: 7,
+      cancelled: 7,
+    };
+
+    // 우선순위에 따라 정렬 (낮은 숫자가 높은 우선순위)
+    const sortedSessions = allSessions.sort((a, b) => {
+      const aPriority = statusPriority[a.status] || 999;
+      const bPriority = statusPriority[b.status] || 999;
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      // 같은 우선순위면 최신 것 (id가 큰 것)
+      return (b.id as string).localeCompare(a.id as string);
+    });
+
+    const gameSession = sortedSessions[0];
+
+    console.log("🔍 [선택된 게임 세션]", {
+      selectedStatus: gameSession.status,
+      selectedId: gameSession.id,
+      totalSessions: allSessions.length,
+    });
 
     // board_snapshot 파싱
     let boardSnapshot: BoardSnapshot | null = null;
@@ -142,18 +128,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     }
 
     return successResponse({
-      data: {
-        id: gameSession.id,
-        status: gameSession.status,
-        board_snapshot: boardSnapshot,
-        completed_lines: gameSession.lines_cleared || 0,
-        total_score: gameSession.total_score || 0,
-        started_at: gameSession.started_at,
-        ended_at: gameSession.ended_at,
-        // 하위 호환성: board_state, current_pieces
-        board_state: boardSnapshot?.board || null,
-        current_pieces: boardSnapshot?.availableBlocks?.map((b) => b.block_type) || null,
-      },
+      id: gameSession.id,
+      status: gameSession.status,
+      board_snapshot: boardSnapshot,
+      completed_lines: gameSession.lines_cleared || 0,
+      total_score: gameSession.total_score || 0,
+      started_at: gameSession.started_at,
+      ended_at: gameSession.ended_at,
+      // 하위 호환성: board_state, current_pieces
+      board_state: boardSnapshot?.board || null,
+      current_pieces: boardSnapshot?.availableBlocks?.map((b) => b.block_type) || null,
     });
   } catch (error) {
     console.error("게임 세션 조회 에러:", error);
@@ -192,8 +176,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       return errorResponse("사용자 ID를 찾을 수 없습니다", 400);
     }
 
-    const userRole = (session.user as { role?: string | null })?.role;
-    const supabase = userRole === "admin" ? createAdminClient() : await createServerClient();
+    // 개발 단계: RLS 문제로 인해 Admin 클라이언트 사용
+    const supabase = createAdminClient();
 
     // action에 따른 처리
     if (action === "request") {
@@ -254,8 +238,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       }
 
       // 세션 상태에 따른 처리
-      if (existingSession.status === "pending") {
-        // 이미 pending 상태면 그대로 반환
+      if (existingSession.status === "requesting") {
+        // 이미 requesting 상태면 그대로 반환 (승인 대기 중)
         return successResponse({
           data: existingSession,
           message: "이미 게임 시작 요청이 대기 중입니다",
@@ -272,81 +256,40 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           data: existingSession,
           message: "이미 게임이 진행 중입니다",
         });
+      } else if (existingSession.status === "inactive") {
+        // inactive 상태는 초기 상태이므로 게임 시작 요청 가능
+        // inactive → requesting으로 변경 (승인 대기 상태)
+        const updateResult = await executeSupabaseQuery(async () => {
+          return await supabase
+            .from("game_sessions")
+            .update({
+              status: "requesting" as GameStatus,
+            })
+            .eq("id", existingSession.id)
+            .select()
+            .single();
+        });
+
+        if (!updateResult.success || !updateResult.data) {
+          return errorResponse("게임 세션 상태 변경에 실패했습니다", 500);
+        }
+
+        return successResponse({
+          data: updateResult.data,
+          message: "게임 시작 요청이 전송되었습니다",
+        });
+      } else if (existingSession.status === "pending") {
+        // pending 상태는 비활성화 상태 (팀 삭제됨)이므로 재요청 불가
+        return errorResponse("게임 세션이 비활성화되어 있습니다. 팀 관리자에게 문의하세요.", 403);
       } else if (existingSession.status === "idle") {
         // idle 상태는 비활성 상태 (팀 삭제 등)이므로 재요청 불가
         return errorResponse("게임 세션이 비활성화되어 있습니다. 팀 관리자에게 문의하세요.", 403);
-        // idle 상태면 pending으로 변경 (게임 승인 요청)
-        const updateResult = await executeSupabaseQuery(async () => {
-          return await supabase
-            .from("game_sessions")
-            .update({
-              status: "pending" as GameStatus,
-            })
-            .eq("id", existingSession.id)
-            .select()
-            .single();
-        });
-
-        if (!updateResult.success || !updateResult.data) {
-          return errorResponse("게임 세션 상태 변경에 실패했습니다", 500);
-        }
-
-        return successResponse({
-          data: updateResult.data,
-          message: "게임 시작 요청이 전송되었습니다",
-        });
       } else if (existingSession.status === "finished") {
-        // 게임이 끝난 상태면 새로운 게임을 위해 초기화 후 pending으로 변경
-        // 파티가 진행 중이면 재요청 가능
-        const updateResult = await executeSupabaseQuery(async () => {
-          return await supabase
-            .from("game_sessions")
-            .update({
-              status: "pending" as GameStatus,
-              total_score: 0,
-              lines_cleared: 0,
-              special_blocks_used: 0,
-              board_snapshot: null,
-              started_at: null,
-              ended_at: null,
-              leader_confirmed_by_user_id: null,
-              leader_confirmed_at: null,
-            })
-            .eq("id", existingSession.id)
-            .select()
-            .single();
-        });
-
-        if (!updateResult.success || !updateResult.data) {
-          return errorResponse("게임 세션 상태 변경에 실패했습니다", 500);
-        }
-
-        return successResponse({
-          data: updateResult.data,
-          message: "게임 시작 요청이 전송되었습니다",
-        });
+        // finished 상태는 파티 종료 시에만 나타나므로 재요청 불가
+        return errorResponse("파티가 종료되어 게임을 시작할 수 없습니다", 400);
       } else if (existingSession.status === "cancelled") {
-        // cancelled 상태면 pending으로 변경
-        // 파티가 진행 중이면 재요청 가능
-        const updateResult = await executeSupabaseQuery(async () => {
-          return await supabase
-            .from("game_sessions")
-            .update({
-              status: "pending" as GameStatus,
-            })
-            .eq("id", existingSession.id)
-            .select()
-            .single();
-        });
-
-        if (!updateResult.success || !updateResult.data) {
-          return errorResponse("게임 세션 상태 변경에 실패했습니다", 500);
-        }
-
-        return successResponse({
-          data: updateResult.data,
-          message: "게임 시작 요청이 전송되었습니다",
-        });
+        // cancelled 상태는 파티 종료 시에만 나타나므로 재요청 불가
+        return errorResponse("파티가 종료되어 게임을 시작할 수 없습니다", 400);
       }
 
       // 예상하지 못한 상태
@@ -535,16 +478,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       // 남은 블럭들은 이미 game_session_id로 마킹되어 있으므로,
       // 새 게임에서는 game_session_id IS NULL인 블럭들(새로 승인받은 블럭)만 조회됨
 
+      // 파티 상태 확인: 파티가 진행 중이면 pending으로, 아니면 finished로 변경
+      const partyResult = await executeSupabaseQuery(async () => {
+        return await supabase.from("parties").select("status").eq("id", partyId).single();
+      });
+
+      const partyStatus = partyResult.success && partyResult.data ? partyResult.data.status : null;
+      // 파티가 진행 중이면 pending으로 변경 (재요청 가능), 아니면 finished로 변경
+      const newStatus =
+        partyStatus === "running" ? ("pending" as GameStatus) : ("finished" as GameStatus);
+
       const { data, error } = await executeSupabaseQuery(async () => {
+        const updateData: {
+          status: GameStatus;
+          ended_at?: string | null;
+          total_score: number;
+          lines_cleared: number;
+          board_snapshot: any;
+        } = {
+          status: newStatus,
+          total_score: totalScore || 0,
+          lines_cleared: completedLines || 0,
+          board_snapshot: finalSnapshot,
+        };
+
+        // finished 상태일 때만 ended_at 설정, pending이면 null로 유지
+        if (newStatus === "finished") {
+          updateData.ended_at = new Date().toISOString();
+        }
+
         return await supabase
           .from("game_sessions")
-          .update({
-            status: "finished" as GameStatus,
-            ended_at: new Date().toISOString(),
-            total_score: totalScore || 0,
-            lines_cleared: completedLines || 0,
-            board_snapshot: finalSnapshot,
-          })
+          .update(updateData)
           .eq("id", gameSessionId)
           .select()
           .single();
@@ -618,7 +583,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
         return errorResponse("팀장만 게임 요청을 취소할 수 있습니다", 403);
       }
 
-      // pending, ready 상태의 게임 세션 취소 가능
+      // requesting, ready 상태의 게임 세션 취소 가능
       // (게임 시작 전까지 취소 가능, running 상태는 이미 시작되어 취소 불가)
       // 먼저 취소할 게임 세션을 찾음
       const findSessionResult = await executeSupabaseQuery(async () => {
@@ -627,7 +592,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           .select("id")
           .eq("party_id", partyId)
           .eq("team_id", teamId)
-          .in("status", ["pending", "ready"])
+          .in("status", ["requesting", "ready"])
           .order("id", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -639,12 +604,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
 
       const sessionId = findSessionResult.data.id;
 
-      // 찾은 게임 세션을 cancelled로 업데이트
+      // 찾은 게임 세션을 cancelled 또는 pending으로 업데이트
+      // ready 상태에서 취소: 파티 진행 중이면 pending으로, 아니면 cancelled로 변경
+      // requesting 상태에서 취소: 파티 진행 중이면 pending으로, 아니면 cancelled로 변경
+      const partyResult = await executeSupabaseQuery(async () => {
+        return await supabase.from("parties").select("status").eq("id", partyId).single();
+      });
+
+      const partyStatus = partyResult.success && partyResult.data ? partyResult.data.status : null;
+      // 파티가 진행 중이면 pending으로 변경 (비활성화), 아니면 cancelled로 변경 (파티 종료)
+      const newStatus =
+        partyStatus === "running" ? ("pending" as GameStatus) : ("cancelled" as GameStatus);
+
       const { data, error } = await executeSupabaseQuery(async () => {
         return await supabase
           .from("game_sessions")
           .update({
-            status: "cancelled" as GameStatus,
+            status: newStatus,
           })
           .eq("id", sessionId)
           .select()

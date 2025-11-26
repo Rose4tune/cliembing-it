@@ -151,7 +151,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     const adminUserId =
       adminResult.success && adminResult.data ? adminResult.data.id : session.user.id; // 관리자가 없으면 현재 사용자 ID 사용
 
-    // 게임 세션 생성 (초기 상태: 'idle' - 아직 게임 승인 요청 전)
+    // 게임 세션 생성 (초기 상태: 'inactive' - 아직 게임 시작 요청 전)
     const gameSessionResult = await executeSupabaseQuery(async () => {
       return await supabase
         .from("game_sessions")
@@ -159,7 +159,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           party_id: partyId,
           team_id: newTeam.id,
           game_type: "tetris",
-          status: "idle" as any, // 초기 상태 (게임 승인 요청 전)
+          status: "inactive" as any, // 초기 상태 (아직 게임 시작 요청 전)
           started_by_admin_id: adminUserId,
           lines_cleared: 0,
           special_blocks_used: 0,
@@ -300,12 +300,11 @@ export async function DELETE(
 
     if (hasGameRecords) {
       // 게임 기록이 있으면 게임 세션을 완전 삭제하지 않고 비활성화
-      // TODO: 스키마에 is_active 플래그가 있으면 false로 설정
-      // 현재는 cancelled 상태로 변경하여 비활성화 표시
+      // idle 상태로 변경 (팀 삭제로 인한 비활성화)
       const deactivateResult = await executeSupabaseQuery(async () => {
         return await supabase
           .from("game_sessions")
-          .update({ status: "cancelled" as any }) // 기록 보존을 위해 cancelled로 표시
+          .update({ status: "idle" as any }) // 팀 삭제로 인한 비활성화 상태
           .eq("party_id", partyId)
           .eq("team_id", teamId);
       });

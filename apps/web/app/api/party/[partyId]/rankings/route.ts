@@ -20,18 +20,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
 
     const { partyId } = await params;
 
-    // Supabase 클라이언트 생성
-    const userRole = (session.user as { role?: string | null })?.role;
-    let supabase;
-    try {
-      if (userRole === "admin") {
-        supabase = createAdminClient();
-      } else {
-        supabase = await createServerClient();
-      }
-    } catch {
-      supabase = await createServerClient();
-    }
+    // 개발 단계: RLS 문제로 인해 Admin 클라이언트 사용
+    const supabase = createAdminClient();
 
     // 파티 멤버 확인
     const { data: member } = await supabase

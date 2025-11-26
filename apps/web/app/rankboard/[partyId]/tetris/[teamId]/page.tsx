@@ -43,7 +43,7 @@ type BlockColor =
   | "special"
   | null;
 
-type GameState = "idle" | "requested" | "confirmed" | "playing" | "finished";
+type GameState = "inactive" | "pending" | "requesting" | "ready" | "running" | "finished";
 
 export default function TetrisPage() {
   const { data: session } = useSession();
@@ -52,7 +52,8 @@ export default function TetrisPage() {
   const partyId = params?.partyId as string;
   const teamId = params?.teamId as string;
 
-  const [gameState, setGameState] = useState<GameState>("idle");
+  const [gameState, setGameState] = useState<GameState>("inactive");
+  const [dbGameStatus, setDbGameStatus] = useState<string | null>(null); // DB의 실제 상태 저장 (idle vs inactive 구분용)
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showGameRules, setShowGameRules] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState("01:05:12");
@@ -163,62 +164,91 @@ export default function TetrisPage() {
           if (gameSessionResponse.ok) {
             const gameSessionResult = await gameSessionResponse.json();
             console.log("🔍 게임 세션 결과:", gameSessionResult);
+            console.log("🔍 gameSessionResult.data:", gameSessionResult.data);
+            console.log("🔍 gameSessionResult.data?.id:", gameSessionResult.data?.id);
 
-            if (gameSessionResult.success && gameSessionResult.data) {
-              gameSessionData = gameSessionResult.data;
-              const session = gameSessionResult.data;
-              console.log("🔍 게임 세션 데이터:", session);
-
-              // DB의 status를 프론트엔드 GameState로 매핑
-              // "idle" -> "idle" (게임 시작 요청 전 또는 비활성)
-              // "pending" -> "requested" (승인 대기 중)
-              // "ready" -> "confirmed" (다이얼로그 표시)
-              // "running" -> "playing" (게임 진행 중)
-              // "finished" -> "finished" (게임 종료, 재시작 버튼 표시)
-              // "cancelled" -> "idle" (게임 취소, 재시작 버튼 표시)
-              let mappedState: GameState = "idle";
-              if (session.status === "idle") {
-                mappedState = "idle";
-                console.log("✅ 게임 상태: idle -> idle (게임 시작 요청 전 또는 비활성)");
-              } else if (session.status === "pending") {
-                mappedState = "requested";
-                console.log("✅ 게임 상태: pending -> requested (승인 대기 중)");
-              } else if (session.status === "ready") {
-                // ready 상태: 관리자 승인 완료, 참가자 게임 시작 대기
-                mappedState = "confirmed";
-                setShowStartDialog(true);
-                console.log("✅ 게임 상태: ready -> confirmed (승인 완료, 다이얼로그 표시)");
-              } else if (session.status === "running") {
-                // running 상태: 실제 게임 진행 중
-                mappedState = "playing";
-                console.log("✅ 게임 상태: running -> playing (게임 진행 중)");
-              } else if (session.status === "finished") {
-                mappedState = "finished";
-                console.log("✅ 게임 상태: finished (게임 종료, 재시작 가능)");
-                // finished 상태는 게임이 완전히 끝난 상태
-                // 파티가 진행 중이면 재시작 가능
-              } else if (session.status === "cancelled") {
-                mappedState = "idle"; // 취소되면 idle로 표시 (재시작 버튼 표시)
-                console.log("✅ 게임 상태: cancelled -> idle (게임 취소됨, 재시작 가능)");
-              }
-              setGameState(mappedState);
-              if (session.board_state) {
-                setBoard(session.board_state);
-              }
-              setCompletedLines(session.completed_lines || 0);
-            } else {
-              // 게임 세션이 없는 경우 (data가 null)
-              // 팀 생성 시 게임 세션이 자동으로 생성되므로, 없으면 에러 상황
-              console.log(
-                "⚠️ 게임 세션이 없습니다. idle 상태로 유지 (팀 생성 시 게임 세션이 생성되어야 함)",
-              );
-              setGameState("idle");
+            // API가 성공 응답을 반환했지만 실제 게임 세션 데이터가 있는지 확인
+            if (!gameSessionResult.success) {
+              // API가 실패 응답을 반환한 경우
+              const errorMessage = gameSessionResult.error || "게임 세션 조회에 실패했습니다";
+              console.error("❌ 게임 세션 조회 실패:", errorMessage);
+              setError(`게임 세션을 불러올 수 없습니다: ${errorMessage}`);
+              setLoading(false);
+              return;
             }
+
+            // 게임 세션 데이터가 실제로 있는지 확인 (id 필드가 있는지 확인)
+            if (!gameSessionResult.data || !gameSessionResult.data.id) {
+              // 게임 세션이 없는 경우 (팀 생성 시 자동으로 생성되어야 하므로 에러)
+              const errorMessage =
+                "게임 세션을 찾을 수 없습니다. 팀 생성 시 게임 세션이 자동으로 생성되어야 합니다.";
+              console.error("❌ 게임 세션이 없습니다:", errorMessage);
+              console.error(
+                "🔍 gameSessionResult 전체 구조:",
+                JSON.stringify(gameSessionResult, null, 2),
+              );
+              setError(errorMessage);
+              setLoading(false);
+              return;
+            }
+
+            gameSessionData = gameSessionResult.data;
+            const session = gameSessionResult.data;
+            console.log("🔍 게임 세션 데이터:", session);
+
+            // DB의 status를 프론트엔드 GameState로 매핑
+            // "inactive" -> "inactive" (초기 상태, 게임 시작 요청 가능, 버튼: "게임 시작 요청하기")
+            // "requesting" -> "requesting" (승인 대기 중, 메시지: "관리자 승인을 기다리는 중...")
+            // "ready" -> "ready" (승인 완료, 게임 시작 대기, 다이얼로그 표시)
+            // "running" -> "running" (게임 진행 중, 게임 컨트롤 표시)
+            // "pending" -> "pending" (게임 데이터 있음, 팀 삭제됨, 더 이상 사용 불가능)
+            // "finished" -> "finished" (파티 종료, 게임 재시작 불가)
+            // DB 상태 저장 (idle vs inactive vs pending 구분용)
+            setDbGameStatus(session.status);
+
+            let mappedState: GameState = "inactive";
+            if (session.status === "inactive") {
+              // inactive: 초기 상태, 게임 시작 요청 가능
+              mappedState = "inactive";
+            } else if (session.status === "requesting") {
+              // requesting: 승인 대기 중
+              mappedState = "requesting";
+            } else if (session.status === "ready") {
+              // ready: 승인 완료, 게임 시작 대기, 다이얼로그 표시
+              mappedState = "ready";
+              setShowStartDialog(true);
+            } else if (session.status === "running") {
+              // running: 게임 진행 중
+              mappedState = "running";
+            } else if (session.status === "pending") {
+              // pending: 게임 데이터 있음, 팀 삭제됨, 더 이상 사용 불가능 (비활성화)
+              mappedState = "pending";
+            } else if (session.status === "finished") {
+              // finished: 파티 종료, 게임 재시작 불가
+              mappedState = "finished";
+            } else if (session.status === "cancelled") {
+              // cancelled: 파티 종료, 게임 재시작 불가
+              mappedState = "finished";
+            } else if (session.status === "idle") {
+              // idle: 비활성화 상태 (팀 삭제 등)
+              mappedState = "pending";
+            }
+            setGameState(mappedState);
+            if (session.board_state) {
+              setBoard(session.board_state);
+            }
+            setCompletedLines(session.completed_lines || 0);
           } else {
-            // 게임 세션 조회 실패 시 에러 로그
-            const errorText = await gameSessionResponse.text();
-            console.error("❌ 게임 세션 조회 실패:", gameSessionResponse.status, errorText);
-            // 에러가 발생해도 idle 상태로 유지 (기본값)
+            // 게임 세션 조회 실패 시 에러 처리
+            const errorResult = await gameSessionResponse
+              .json()
+              .catch(() => ({ error: "알 수 없는 오류" }));
+            const errorMessage =
+              errorResult.error || `게임 세션 조회에 실패했습니다 (${gameSessionResponse.status})`;
+            console.error("❌ 게임 세션 조회 실패:", gameSessionResponse.status, errorMessage);
+            setError(`게임 세션을 불러올 수 없습니다: ${errorMessage}`);
+            setLoading(false);
+            return;
           }
 
           // 게임이 진행 중이 아닐 때만 전체 블럭 조회 (게임 진행 중이면 게임 세션의 블럭 사용)
@@ -383,25 +413,38 @@ export default function TetrisPage() {
           if (payload.eventType === "UPDATE" && payload.new) {
             const updatedSession = payload.new as any;
 
+            // DB 상태 저장 (idle vs inactive 구분용)
+            setDbGameStatus(updatedSession.status);
+
             // 상태 매핑 및 업데이트
-            let mappedState: GameState = "idle";
-            if (updatedSession.status === "idle") {
-              mappedState = "idle";
-            } else if (updatedSession.status === "pending") {
-              mappedState = "requested";
+            let mappedState: GameState = "inactive";
+            if (updatedSession.status === "inactive") {
+              mappedState = "inactive";
+              console.log("✅ Realtime: inactive (초기 상태)");
+            } else if (updatedSession.status === "requesting") {
+              mappedState = "requesting";
+              console.log("✅ Realtime: requesting (승인 대기 중)");
             } else if (updatedSession.status === "ready") {
-              mappedState = "confirmed";
+              mappedState = "ready";
               setShowStartDialog(true);
-              console.log("✅ Realtime: ready -> confirmed (다이얼로그 표시)");
+              console.log("✅ Realtime: ready (다이얼로그 표시)");
             } else if (updatedSession.status === "running") {
-              mappedState = "playing";
-              console.log("✅ Realtime: running -> playing");
+              mappedState = "running";
+              console.log("✅ Realtime: running (게임 진행 중)");
+            } else if (updatedSession.status === "pending") {
+              mappedState = "pending";
+              console.log(
+                "✅ Realtime: pending (게임 데이터 있음, 팀 삭제됨, 더 이상 사용 불가능)",
+              );
             } else if (updatedSession.status === "finished") {
               mappedState = "finished";
-              console.log("✅ Realtime: finished");
+              console.log("✅ Realtime: finished (파티 종료, 게임 재시작 불가)");
             } else if (updatedSession.status === "cancelled") {
-              mappedState = "idle";
-              console.log("✅ Realtime: cancelled -> idle");
+              mappedState = "finished";
+              console.log("✅ Realtime: cancelled -> finished (파티 종료, 게임 재시작 불가)");
+            } else if (updatedSession.status === "idle") {
+              mappedState = "pending";
+              console.log("✅ Realtime: idle -> pending (비활성화)");
             }
 
             setGameState(mappedState);
@@ -416,7 +459,7 @@ export default function TetrisPage() {
           } else if (payload.eventType === "DELETE") {
             // 게임 세션이 삭제된 경우 (드물게 발생)
             console.log("⚠️ Realtime: 게임 세션이 삭제됨");
-            setGameState("idle");
+            setGameState("inactive");
           }
         },
       )
@@ -474,7 +517,7 @@ export default function TetrisPage() {
 
       const result = await response.json();
       if (response.ok && result.success) {
-        setGameState("requested");
+        setGameState("requesting");
         // 메시지가 있으면 표시 (이미 대기 중인 경우)
         const message =
           result.message || "게임 시작 요청이 전송되었습니다. 관리자 승인을 기다려주세요.";
@@ -512,7 +555,7 @@ export default function TetrisPage() {
 
       const result = await response.json();
       if (response.ok && result.success) {
-        setGameState("idle");
+        setGameState("inactive");
         alert("게임 시작 요청이 취소되었습니다.");
       } else {
         alert(result.error || "게임 요청 취소에 실패했습니다");
@@ -541,7 +584,7 @@ export default function TetrisPage() {
 
       const result = await response.json();
       if (response.ok && result.success) {
-        setGameState("idle");
+        setGameState("pending");
         setShowStartDialog(false);
         // alert는 표시하지 않음 (사용자가 직접 취소 버튼을 눌렀으므로)
       } else {
@@ -555,7 +598,7 @@ export default function TetrisPage() {
 
   // 게임 시작 확인 (스탭이 확인한 경우)
   const handleGameStartConfirmed = useCallback(() => {
-    setGameState("confirmed");
+    setGameState("ready");
     setShowStartDialog(true);
   }, []);
 
@@ -585,7 +628,7 @@ export default function TetrisPage() {
 
       const result = await response.json();
       if (response.ok && result.success) {
-        setGameState("playing");
+        setGameState("running");
         setShowStartDialog(false);
         // 첫 블럭 생성
         if (remainingPieces.length > 0) {
@@ -663,7 +706,7 @@ export default function TetrisPage() {
       }
 
       // 5. 게임 상태 저장 (비동기로 저장, 에러 무시)
-      if (partyId && teamId && gameState === "playing") {
+      if (partyId && teamId && gameState === "running") {
         fetch(`/api/party/${partyId}/game-session`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -704,7 +747,7 @@ export default function TetrisPage() {
   // 게임 컨트롤 핸들러
   const handleMove = useCallback(
     (direction: "left" | "right" | "down" | "up") => {
-      if (!currentPiece || gameState !== "playing") return;
+      if (!currentPiece || gameState !== "running") return;
 
       setCurrentPiece((prev) => {
         if (!prev) return null;
@@ -729,7 +772,7 @@ export default function TetrisPage() {
   );
 
   const handleRotate = useCallback(() => {
-    if (!currentPiece || gameState !== "playing" || isSpecialBlock) return;
+    if (!currentPiece || gameState !== "running" || isSpecialBlock) return;
 
     const rotatedShape = rotatePiece(currentPiece.shape);
     // 회전 후 배치 가능 여부 체크
@@ -742,7 +785,7 @@ export default function TetrisPage() {
   }, [currentPiece, gameState, isSpecialBlock, board]);
 
   const handleDrop = useCallback(() => {
-    if (!currentPiece || gameState !== "playing" || isSpecialBlock) return;
+    if (!currentPiece || gameState !== "running" || isSpecialBlock) return;
 
     const dropDistance = dropPiece(board, currentPiece, false);
     if (dropDistance > 0) {
@@ -765,7 +808,7 @@ export default function TetrisPage() {
   }, [currentPiece, gameState, isSpecialBlock, board, handlePieceLock]);
 
   const handleConfirm = useCallback(() => {
-    if (!currentPiece || gameState !== "playing" || !isSpecialBlock) return;
+    if (!currentPiece || gameState !== "running" || !isSpecialBlock) return;
     // 특수 블럭 확정 - 현재 위치에 고정
     handlePieceLock(currentPiece);
     setIsSpecialBlock(false);
@@ -817,14 +860,14 @@ export default function TetrisPage() {
 
   // 게임 종료 체크
   useEffect(() => {
-    if (gameState === "playing" && remainingPieces.length === 0 && !currentPiece) {
+    if (gameState === "running" && remainingPieces.length === 0 && !currentPiece) {
       handleFinishGame();
     }
   }, [gameState, remainingPieces, currentPiece, handleFinishGame]);
 
   // 게임 상태 주기적 저장 (30초마다)
   useEffect(() => {
-    if (gameState !== "playing" || !partyId || !teamId) return;
+    if (gameState !== "running" || !partyId || !teamId) return;
 
     const interval = setInterval(() => {
       fetch(`/api/party/${partyId}/game-session`, {
@@ -923,12 +966,16 @@ export default function TetrisPage() {
           />
 
           {/* 게임 시작 버튼 또는 게임 컨트롤 */}
-          {gameState === "idle" || gameState === "finished" ? (
+          {gameState === "inactive" || gameState === "pending" || gameState === "finished" ? (
             <div className="flex items-center gap-4">
               {/* 파티가 진행 중일 때만 게임 시작 요청 가능 */}
               {party && party.status === "running" ? (
                 <>
-                  {isLeader && (
+                  {dbGameStatus === "pending" ? (
+                    <div className="flex-4 text-center text-destructive text-sm py-3">
+                      게임 세션이 비활성화되어 있습니다. 팀 관리자에게 문의하세요.
+                    </div>
+                  ) : isLeader ? (
                     <Button
                       variant="primary"
                       size="lg"
@@ -936,10 +983,9 @@ export default function TetrisPage() {
                       onClick={handleRequestGameStart}
                       disabled={acquiredPieces === 0}
                     >
-                      {gameState === "finished" ? "게임 다시 시작하기" : "게임 시작 요청하기"}
+                      게임 시작 요청하기
                     </Button>
-                  )}
-                  {!isLeader && (
+                  ) : (
                     <div className="flex-4 text-center text-muted-foreground text-sm py-3">
                       팀장만 게임 시작을 요청할 수 있습니다
                     </div>
@@ -953,7 +999,9 @@ export default function TetrisPage() {
                     <>
                       {gameState === "finished"
                         ? `파티가 종료되어 게임을 다시 시작할 수 없습니다`
-                        : `파티가 진행 중이 아닙니다`}
+                        : gameState === "pending"
+                          ? `게임 세션이 비활성화되어 있습니다. 팀 관리자에게 문의하세요.`
+                          : `파티가 진행 중이 아닙니다`}
                       <br />
                       <span className="text-xs text-gray-500">
                         (파티 상태: {party.status || "알 수 없음"})
@@ -972,7 +1020,7 @@ export default function TetrisPage() {
                 <Info className="h-5 w-5" />
               </Button>
             </div>
-          ) : gameState === "requested" ? (
+          ) : gameState === "requesting" ? (
             <div className="flex items-center gap-4">
               {isLeader && (
                 <>
@@ -1004,7 +1052,23 @@ export default function TetrisPage() {
                 <Info className="h-5 w-5" />
               </Button>
             </div>
-          ) : gameState === "playing" ? (
+          ) : gameState === "ready" ? (
+            // ready 상태: 승인 완료, 게임 시작 대기 (다이얼로그 표시)
+            <div className="flex items-center gap-4">
+              <div className="flex-4 text-center text-muted-foreground text-sm py-3">
+                게임 시작 준비가 완료되었습니다. 다이얼로그에서 확인해주세요.
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="flex-1"
+                onClick={() => setShowGameRules(!showGameRules)}
+                aria-label="게임 규칙 보기"
+              >
+                <Info className="h-5 w-5" />
+              </Button>
+            </div>
+          ) : gameState === "running" ? (
             <GameControls
               onMove={handleMove}
               onRotate={handleRotate}
@@ -1068,7 +1132,7 @@ export default function TetrisPage() {
           teamTotalScore={teamTotalScore}
           completedLines={completedLines}
           acquiredPieces={acquiredPieces}
-          timeRemaining={gameState === "playing" ? timeRemaining : undefined}
+          timeRemaining={gameState === "running" ? timeRemaining : undefined}
         />
 
         {/* 실시간 팀 랭킹 */}

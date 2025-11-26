@@ -209,7 +209,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         .order("updated_at", { ascending: false });
     });
 
-    // 게임 요청 목록 조회 (game_sessions에서 status='pending'인 것만)
+    // 게임 요청 목록 조회 (game_sessions에서 status='requesting'인 것만)
     const gameRequestsResult = await executeSupabaseQuery(async () => {
       return await supabase
         .from("game_sessions")
@@ -227,7 +227,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         `,
         )
         .eq("party_id", partyId)
-        .eq("status", "pending")
+        .eq("status", "requesting")
         .order("id", { ascending: false }); // created_at이 없으므로 id로 정렬
     });
 
@@ -292,8 +292,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       const supabase = createAdminClient();
 
       // 게임 세션 상태 업데이트
-      // approve_game: pending → ready (관리자 승인 완료, 참가자 게임 시작 대기)
-      // reject_game: pending → cancelled (게임 요청 거부)
+      // approve_game: requesting → ready (관리자 승인 완료, 참가자 게임 시작 대기)
+      // reject_game: requesting → cancelled (게임 요청 거부)
       const newStatus = action === "approve_game" ? "ready" : "cancelled";
       const adminUserId = session.user.id;
 
@@ -317,7 +317,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           .update(updateData)
           .eq("id", gameSessionId)
           .eq("party_id", partyId)
-          .eq("status", "pending") // pending 상태인 것만 업데이트
+          .eq("status", "requesting") // requesting 상태인 것만 업데이트
           .select()
           .single();
       });
