@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { Header } from "../../../components/Header";
@@ -8,6 +8,7 @@ import { AdminSidebar } from "../../../components/AdminSidebar";
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
 import { CheckCircle, XCircle, Clock, GamepadIcon } from "lucide-react";
+import { createClient } from "@pkg/supabase/client";
 
 type ScoreApproval = {
   id: string;
@@ -16,6 +17,7 @@ type ScoreApproval = {
   problem_count: number;
   score: number;
   created_at: string;
+  updated_at?: string;
   users: {
     id: string;
     nickname: string;
@@ -43,18 +45,9 @@ export default function ApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-      return;
-    }
+  const fetchApprovals = useCallback(async () => {
+    if (!partyId) return;
 
-    if (status === "authenticated" && partyId) {
-      fetchApprovals();
-    }
-  }, [status, partyId, router]);
-
-  const fetchApprovals = async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/admin/${partyId}/approvals`);
@@ -73,7 +66,70 @@ export default function ApprovalsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [partyId]);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+      return;
+    }
+
+    if (status === "authenticated" && partyId) {
+      fetchApprovals();
+
+      // Supabase Realtime 구독: 승인 대기 목록 실시간 업데이트
+      const supabase = createClient();
+      if (!supabase) {
+        console.error("Supabase 클라이언트 생성 실패");
+        return;
+      }
+
+      console.log("🔄 관리자 승인 페이지 Realtime 구독 시작");
+
+      // 1. level_scores 변경 감지 (점수 승인 대기 목록)
+      const scoresChannel = supabase
+        .channel(`admin_approvals_scores_${partyId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*", // INSERT, UPDATE, DELETE 모두 감지
+            schema: "public",
+            table: "level_scores",
+            filter: `party_id=eq.${partyId}`,
+          },
+          (payload) => {
+            console.log("📡 level_scores 변경 감지 (승인 페이지):", payload);
+            fetchApprovals(); // 승인 대기 목록 다시 조회
+          },
+        )
+        .subscribe();
+
+      // 2. game_sessions 변경 감지 (게임 요청 목록)
+      const gameSessionsChannel = supabase
+        .channel(`admin_approvals_games_${partyId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*", // INSERT, UPDATE, DELETE 모두 감지
+            schema: "public",
+            table: "game_sessions",
+            filter: `party_id=eq.${partyId}`,
+          },
+          (payload) => {
+            console.log("📡 game_sessions 변경 감지 (승인 페이지):", payload);
+            fetchApprovals(); // 게임 요청 목록 다시 조회
+          },
+        )
+        .subscribe();
+
+      // cleanup: 컴포넌트 언마운트 시 구독 해제
+      return () => {
+        console.log("🔄 관리자 승인 페이지 Realtime 구독 해제");
+        supabase.removeChannel(scoresChannel);
+        supabase.removeChannel(gameSessionsChannel);
+      };
+    }
+  }, [status, partyId, router, fetchApprovals]);
 
   const handleApproveScore = async (scoreId: string, approved: boolean) => {
     try {

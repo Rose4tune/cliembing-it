@@ -27,6 +27,7 @@ import {
   type BlockType,
 } from "@pkg/shared";
 import { calculateScore as calculateTetrisScore } from "@pkg/shared/services/tetris-game-service";
+import { createClient } from "@pkg/supabase/client";
 
 const BOARD_WIDTH = 10;
 const BOARD_HEIGHT = 20;
@@ -311,6 +312,122 @@ export default function TetrisPage() {
       console.log("⚠️ 파티 정보가 아직 로드되지 않았습니다");
     }
   }, [party]);
+
+  // Supabase Realtime 구독: 파티 상태 변경 시 자동 업데이트
+  useEffect(() => {
+    if (!partyId) return;
+
+    const supabase = createClient();
+    if (!supabase) {
+      console.error("Supabase 클라이언트 생성 실패");
+      return;
+    }
+
+    console.log("🔄 파티 상태 Realtime 구독 시작");
+
+    // 파티 상태 변경 감지
+    const partyChannel = supabase
+      .channel(`party_status_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "parties",
+          filter: `id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("📡 파티 상태 변경 감지:", payload);
+          const updatedParty = payload.new as Party;
+          if (updatedParty) {
+            setParty(updatedParty);
+            console.log("✅ 파티 상태 업데이트:", updatedParty.status);
+          }
+        },
+      )
+      .subscribe();
+
+    // cleanup: 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      console.log("🔄 파티 상태 Realtime 구독 해제");
+      supabase.removeChannel(partyChannel);
+    };
+  }, [partyId]);
+
+  // Supabase Realtime 구독: 게임 세션 상태 변경 시 자동 업데이트
+  useEffect(() => {
+    if (!partyId || !teamId) return;
+
+    const supabase = createClient();
+    if (!supabase) {
+      console.error("Supabase 클라이언트 생성 실패");
+      return;
+    }
+
+    console.log("🔄 게임 세션 상태 Realtime 구독 시작");
+
+    // 게임 세션 상태 변경 감지
+    const gameSessionChannel = supabase
+      .channel(`game_session_${partyId}_${teamId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE 모두 감지
+          schema: "public",
+          table: "game_sessions",
+          filter: `party_id=eq.${partyId} AND team_id=eq.${teamId}`,
+        },
+        (payload) => {
+          console.log("📡 게임 세션 상태 변경 감지:", payload);
+
+          if (payload.eventType === "UPDATE" && payload.new) {
+            const updatedSession = payload.new as any;
+
+            // 상태 매핑 및 업데이트
+            let mappedState: GameState = "idle";
+            if (updatedSession.status === "idle") {
+              mappedState = "idle";
+            } else if (updatedSession.status === "pending") {
+              mappedState = "requested";
+            } else if (updatedSession.status === "ready") {
+              mappedState = "confirmed";
+              setShowStartDialog(true);
+              console.log("✅ Realtime: ready -> confirmed (다이얼로그 표시)");
+            } else if (updatedSession.status === "running") {
+              mappedState = "playing";
+              console.log("✅ Realtime: running -> playing");
+            } else if (updatedSession.status === "finished") {
+              mappedState = "finished";
+              console.log("✅ Realtime: finished");
+            } else if (updatedSession.status === "cancelled") {
+              mappedState = "idle";
+              console.log("✅ Realtime: cancelled -> idle");
+            }
+
+            setGameState(mappedState);
+
+            // 보드 상태 복원
+            if (updatedSession.board_state) {
+              setBoard(updatedSession.board_state);
+            }
+            if (updatedSession.completed_lines !== undefined) {
+              setCompletedLines(updatedSession.completed_lines || 0);
+            }
+          } else if (payload.eventType === "DELETE") {
+            // 게임 세션이 삭제된 경우 (드물게 발생)
+            console.log("⚠️ Realtime: 게임 세션이 삭제됨");
+            setGameState("idle");
+          }
+        },
+      )
+      .subscribe();
+
+    // cleanup: 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      console.log("🔄 게임 세션 상태 Realtime 구독 해제");
+      supabase.removeChannel(gameSessionChannel);
+    };
+  }, [partyId, teamId]);
 
   // 남은 시간 계산
   useEffect(() => {
@@ -732,65 +849,8 @@ export default function TetrisPage() {
     return () => clearInterval(interval);
   }, [gameState, partyId, teamId, board, remainingPieces, completedLines, calculateGameScore]);
 
-  // pending 상태일 때 주기적으로 게임 세션 상태 확인 (폴링)
-  // 관리자가 승인하면 running 상태가 되어 다이얼로그가 표시되어야 함
-  useEffect(() => {
-    if (gameState !== "requested" || !partyId || !teamId) return;
-
-    console.log("🔄 폴링 시작: gameState = requested");
-
-    // 3초마다 게임 세션 상태 확인
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/party/${partyId}/game-session?teamId=${teamId}`);
-        if (response.ok) {
-          const result = await response.json();
-          console.log("🔄 폴링 결과:", result);
-          if (result.success && result.data) {
-            const session = result.data;
-            console.log("🔄 폴링 세션 상태:", session.status);
-            // 관리자가 승인하여 ready 상태가 되었으면 confirmed로 변경하고 다이얼로그 표시
-            if (session.status === "ready") {
-              console.log("✅ 폴링: ready -> confirmed (관리자 승인 완료)");
-              setGameState("confirmed");
-              setShowStartDialog(true);
-              clearInterval(interval); // 승인되면 폴링 중단
-            } else if (session.status === "running") {
-              // 이미 게임이 시작됨 (비정상 상황)
-              console.log("⚠️ 폴링: running -> playing (게임 진행 중)");
-              setGameState("playing");
-              clearInterval(interval);
-            } else if (session.status === "cancelled") {
-              console.log("✅ 폴링: cancelled -> idle");
-              // 취소되면 idle로 복귀
-              setGameState("idle");
-              clearInterval(interval); // 취소되면 폴링 중단
-            } else if (session.status === "pending") {
-              // pending 상태 유지 - 계속 폴링 (관리자 승인 대기)
-              console.log("⏳ 폴링: pending 상태 유지 (승인 대기 중)");
-            } else if (session.status === "idle") {
-              // idle 상태로 돌아가면 (비정상 상황)
-              console.log("⚠️ 폴링: idle 상태로 변경됨");
-              setGameState("idle");
-              clearInterval(interval);
-            }
-          } else if (result.success && !result.data) {
-            // 게임 세션이 없어졌으면 idle로 복귀
-            console.log("⚠️ 폴링: 게임 세션 없음 -> idle");
-            setGameState("idle");
-            clearInterval(interval);
-          }
-        }
-      } catch (error) {
-        console.error("❌ 게임 세션 상태 확인 에러:", error);
-      }
-    }, 3000); // 3초마다 확인
-
-    return () => {
-      console.log("🔄 폴링 중단");
-      clearInterval(interval);
-    };
-  }, [gameState, partyId, teamId]);
+  // ⚠️ 폴링 제거됨: Realtime 구독으로 대체됨
+  // 게임 세션 상태 변경은 Realtime 구독을 통해 실시간으로 감지됩니다.
 
   // 팀 랭킹 조회
   useEffect(() => {

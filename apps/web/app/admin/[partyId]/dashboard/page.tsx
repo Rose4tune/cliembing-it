@@ -15,6 +15,7 @@ import {
 } from "@pkg/shared";
 import { Calendar, Users, FileText, Code, Play, Pause } from "lucide-react";
 import { useViewMode } from "../../../contexts/ViewModeContext";
+import { createClient } from "@pkg/supabase/client";
 
 export default function AdminDashboardPage() {
   const { data: session, status } = useSession();
@@ -186,9 +187,58 @@ export default function AdminDashboardPage() {
     };
 
     fetchTeamsAndGames();
-    // 주기적으로 업데이트 (30초마다)
-    const interval = setInterval(fetchTeamsAndGames, 30000);
-    return () => clearInterval(interval);
+
+    // Supabase Realtime 구독: 팀 및 게임 세션 변경 시 자동 업데이트
+    const supabase = createClient();
+    if (!supabase) {
+      console.error("Supabase 클라이언트 생성 실패");
+      return;
+    }
+
+    console.log("🔄 관리자 대시보드 Realtime 구독 시작");
+
+    // 1. 팀 목록 변경 감지
+    const teamsChannel = supabase
+      .channel(`admin_teams_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE 모두 감지
+          schema: "public",
+          table: "teams",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("📡 팀 목록 변경 감지:", payload);
+          fetchTeamsAndGames(); // 팀 목록 다시 조회
+        },
+      )
+      .subscribe();
+
+    // 2. 게임 세션 상태 변경 감지
+    const gameSessionsChannel = supabase
+      .channel(`admin_game_sessions_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE 모두 감지
+          schema: "public",
+          table: "game_sessions",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("📡 게임 세션 상태 변경 감지:", payload);
+          fetchTeamsAndGames(); // 게임 세션 상태 다시 조회
+        },
+      )
+      .subscribe();
+
+    // cleanup: 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      console.log("🔄 관리자 대시보드 Realtime 구독 해제");
+      supabase.removeChannel(teamsChannel);
+      supabase.removeChannel(gameSessionsChannel);
+    };
   }, [partyId, status, hasAccess, party?.status]);
 
   const handleStatusChange = async (newStatus: PartyStatus) => {

@@ -129,15 +129,15 @@ export default function RankboardPage() {
     // 초기 데이터 로드
     fetchRankingData();
 
-    // Supabase Realtime 구독: level_scores 변경 시 자동으로 랭킹 업데이트
+    // Supabase Realtime 구독
     const supabase = createClient();
     if (!supabase) {
       console.error("Supabase 클라이언트 생성 실패");
       return;
     }
 
-    // level_scores 테이블 변경 감지 (INSERT, UPDATE, DELETE)
-    const channel = supabase
+    // 1. level_scores 테이블 변경 감지 (INSERT, UPDATE, DELETE)
+    const scoresChannel = supabase
       .channel(`level_scores_changes_${partyId}`)
       .on(
         "postgres_changes",
@@ -148,7 +148,7 @@ export default function RankboardPage() {
           filter: `party_id=eq.${partyId}`, // 해당 파티의 변경만 감지
         },
         (payload) => {
-          console.log("level_scores 변경 감지:", payload);
+          console.log("📡 level_scores 변경 감지:", payload);
           // 랭킹 데이터 다시 조회 (로딩 상태 없이)
           setLoading(false); // 로딩 상태는 유지하지 않음
           fetchRankingData();
@@ -156,9 +156,33 @@ export default function RankboardPage() {
       )
       .subscribe();
 
+    // 2. 파티 상태 변경 감지
+    const partyChannel = supabase
+      .channel(`party_status_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "parties",
+          filter: `id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("📡 파티 상태 변경 감지:", payload);
+          const updatedParty = payload.new as Party;
+          if (updatedParty) {
+            setParty(updatedParty);
+            // 랭킹 데이터도 다시 조회하여 파티 정보 업데이트
+            fetchRankingData();
+          }
+        },
+      )
+      .subscribe();
+
     // cleanup: 컴포넌트 언마운트 시 구독 해제
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(scoresChannel);
+      supabase.removeChannel(partyChannel);
     };
   }, [partyId, fetchRankingData]);
 
