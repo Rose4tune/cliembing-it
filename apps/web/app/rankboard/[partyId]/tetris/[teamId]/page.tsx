@@ -44,7 +44,9 @@ export default function TetrisPage() {
   const [timeRemaining, setTimeRemaining] = useState("01:05:12");
   const [teamTotalScore, setTeamTotalScore] = useState(0);
   const [completedLines, setCompletedLines] = useState(0);
-  const [remainingPieces, setRemainingPieces] = useState<BlockColor[]>([]);
+  const [remainingPieces, setRemainingPieces] = useState<
+    Array<{ type: string; color: BlockColor }>
+  >([]);
   const [board, setBoard] = useState<BlockColor[][]>(
     Array(BOARD_HEIGHT)
       .fill(null)
@@ -154,8 +156,8 @@ export default function TetrisPage() {
               console.log("블럭 조회 결과:", blocksResult); // 디버깅용
               if (blocksResult.success && blocksResult.data?.blocks) {
                 console.log("블럭 데이터:", blocksResult.data.blocks); // 디버깅용
-                // block_type을 BlockColor로 변환
-                const blocks: BlockColor[] = blocksResult.data.blocks
+                // block_type과 BlockColor를 함께 저장
+                const blocks: Array<{ type: string; color: BlockColor }> = blocksResult.data.blocks
                   .map((block: { block_type: string }) => {
                     // block_type을 BlockColor로 매핑
                     const blockTypeMap: Record<string, BlockColor> = {
@@ -171,10 +173,11 @@ export default function TetrisPage() {
                     const color = blockTypeMap[block.block_type] || null;
                     if (!color) {
                       console.warn("알 수 없는 블럭 타입:", block.block_type);
+                      return null;
                     }
-                    return color;
+                    return { type: block.block_type, color };
                   })
-                  .filter((block: BlockColor | null) => block !== null); // null 제거
+                  .filter((block): block is { type: string; color: BlockColor } => block !== null); // null 제거
                 console.log("변환된 블럭:", blocks); // 디버깅용
                 setRemainingPieces(blocks);
               } else {
@@ -186,7 +189,20 @@ export default function TetrisPage() {
           } else {
             // 게임 진행 중이면 게임 세션의 블럭 사용
             if (gameSessionData.current_pieces) {
-              setRemainingPieces(gameSessionData.current_pieces);
+              // 게임 세션의 블럭이 이미 올바른 형식인지 확인
+              const pieces = gameSessionData.current_pieces;
+              if (Array.isArray(pieces) && pieces.length > 0) {
+                // 첫 번째 블럭이 객체 형식인지 확인
+                if (typeof pieces[0] === "object" && "type" in pieces[0] && "color" in pieces[0]) {
+                  setRemainingPieces(pieces as Array<{ type: string; color: BlockColor }>);
+                } else {
+                  // BlockColor[] 형식이면 변환 필요 (하지만 타입 정보가 없으므로 빈 배열로)
+                  console.warn("게임 세션의 블럭 형식이 예상과 다릅니다:", pieces);
+                  setRemainingPieces([]);
+                }
+              } else {
+                setRemainingPieces([]);
+              }
             }
           }
         }

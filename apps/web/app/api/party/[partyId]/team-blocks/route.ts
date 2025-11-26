@@ -32,59 +32,53 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     // 권한 체크는 RLS에서 수행되므로, 여기서는 관리자 클라이언트로 직접 조회
     const adminClient = createAdminClient();
 
-    // Supabase 함수를 먼저 시도 (SECURITY DEFINER로 RLS 우회)
-    const blocksResult = await executeSupabaseQuery<
-      Array<{
-        id: string;
-        block_type: string;
-        created_at: string;
-        original_id: string;
-        block_index: number;
-      }>
-    >(async () => {
-      return await adminClient.rpc("get_team_blocks", {
-        p_party_id: partyId,
-        p_team_id: teamId,
-      });
+    // 직접 쿼리로 조회 (submission_id 필터 포함)
+    // Supabase 함수는 나중에 업데이트 후 사용
+    console.log("🔍 직접 쿼리로 블럭 조회 시작:", { partyId, teamId });
+
+    // 디버깅: 필터 전 전체 블럭 조회
+    const allBlocksDebug = await adminClient
+      .from("team_block_events")
+      .select("id, block_type, value, submission_id, game_session_id, created_at")
+      .eq("party_id", partyId)
+      .eq("team_id", teamId);
+
+    console.log("🔍 전체 블럭 (필터 전):", {
+      totalCount: allBlocksDebug.data?.length || 0,
+      blocks: allBlocksDebug.data,
+      error: allBlocksDebug.error,
     });
 
-    if (blocksResult.success && blocksResult.data && blocksResult.data.length > 0) {
-      // 함수 성공 시
-      const formattedBlocks = blocksResult.data.map((block) => ({
-        id: block.id,
-        block_type: block.block_type || "",
-        created_at: block.created_at,
-      }));
-
-      console.log("✅ 블럭 조회 성공 (Supabase 함수 사용):", {
-        partyId,
-        teamId,
-        blocksCount: formattedBlocks.length,
-      });
-
-      return successResponse({
-        blocks: formattedBlocks,
-      });
-    }
-
-    // 함수 실패 시 직접 쿼리로 폴백 (관리자 클라이언트 사용)
-    console.log("⚠️ Supabase 함수 실패, 직접 쿼리로 폴백:", blocksResult.error);
-
+    // 승인된 점수와 연결된 블럭만 조회 (submission_id가 null이 아닌 것만)
+    // Supabase PostgREST에서는 .not().is() 대신 직접 필터링
     const fallbackResult = await executeSupabaseQuery<
       Array<{
         id: string;
         block_type: string;
         created_at: string;
         value: number;
+        submission_id: string | null;
       }>
     >(async () => {
-      return await adminClient
+      const result = await adminClient
         .from("team_block_events")
-        .select("id, block_type, created_at, value")
+        .select("id, block_type, created_at, value, submission_id")
         .eq("party_id", partyId)
         .eq("team_id", teamId)
         .is("game_session_id", null)
         .order("created_at", { ascending: true });
+
+      // submission_id가 null인 블럭 필터링 (서버 사이드)
+      if (result.data) {
+        const filtered = result.data.filter((block) => block.submission_id !== null);
+        console.log("🔍 필터링 결과:", {
+          before: result.data.length,
+          after: filtered.length,
+          filteredOut: result.data.filter((b) => b.submission_id === null),
+        });
+        result.data = filtered;
+      }
+      return result;
     });
 
     if (!fallbackResult.success || fallbackResult.error) {
@@ -122,6 +116,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       teamId,
       rawBlocksCount: blocks.length,
       expandedBlocksCount: expandedBlocks.length,
+      blockDetails: blocks.map((b) => ({
+        id: b.id,
+        block_type: b.block_type,
+        value: b.value,
+        submission_id: b.submission_id,
+      })),
     });
 
     return successResponse({

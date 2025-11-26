@@ -20,7 +20,7 @@ interface TetrisBoardProps {
   board: BlockColor[][];
   currentPiece?: { x: number; y: number; shape: number[][]; color: BlockColor };
   specialLines?: number[]; // 특수 라인 위치 (y 좌표)
-  nextPieces?: BlockColor[]; // 대기 중인 블럭들
+  nextPieces?: BlockColor[] | Array<{ type: string; color: BlockColor }>; // 대기 중인 블럭들 (타입 정보 포함 가능)
 }
 
 export function TetrisBoard({
@@ -103,22 +103,79 @@ export function TetrisBoard({
     ],
   };
 
-  // 블럭 색상에 따라 모양 할당 (반복 가능하도록 순환)
-  const getShapeForColor = (color: BlockColor, index: number): number[][] => {
+  // 블럭 타입 또는 색상에 따라 모양 할당
+  const getShapeForPiece = (
+    piece: BlockColor | { type: string; color: BlockColor },
+    index: number,
+  ): number[][] => {
+    // 블럭 타입 정보가 있으면 해당 타입 사용
+    if (typeof piece === "object" && "type" in piece) {
+      const blockType = piece.type;
+      // 블럭 타입 이름 매핑 (API에서 오는 이름 -> tetrisShapes 키)
+      const typeMap: Record<string, string> = {
+        T: "T",
+        O: "O",
+        I: "I",
+        S: "S",
+        Z: "Z",
+        "L-left": "L",
+        "L-right": "J",
+        special: "special",
+      };
+      const shapeKey = typeMap[blockType] || blockType;
+      if (shapeKey === "special") return [];
+      const shape = tetrisShapes[shapeKey];
+      if (shape) return shape;
+    }
+
+    // 블럭 타입 정보가 없으면 색상으로 역매핑 시도
+    const color = typeof piece === "object" && "color" in piece ? piece.color : piece;
     if (color === "special" || !color) return [];
 
+    // 색상 -> 블럭 타입 역매핑
+    const colorToType: Record<string, string> = {
+      blue: "T",
+      pink: "O",
+      purple: "I",
+      red: "S",
+      green: "Z",
+      orange: "L-right",
+      yellow: "L-left",
+    };
+
+    const blockType = colorToType[color];
+    if (blockType) {
+      const typeMap: Record<string, string> = {
+        T: "T",
+        O: "O",
+        I: "I",
+        S: "S",
+        Z: "Z",
+        "L-left": "L",
+        "L-right": "J",
+      };
+      const shapeKey = typeMap[blockType];
+      if (shapeKey) {
+        const shape = tetrisShapes[shapeKey];
+        if (shape) return shape;
+      }
+    }
+
+    // 폴백: 인덱스 기반 (기존 방식)
     const shapeKeys = Object.keys(tetrisShapes);
     if (shapeKeys.length === 0) return [];
-
     const shapeKey = shapeKeys[index % shapeKeys.length];
     if (!shapeKey) return [];
-
     const shape = tetrisShapes[shapeKey];
     return shape || [];
   };
 
   // 블럭 미리보기 렌더링
-  const getBlockPreview = (color: BlockColor | null, index: number) => {
+  const getBlockPreview = (
+    piece: BlockColor | { type: string; color: BlockColor } | null,
+    index: number,
+  ) => {
+    const color = typeof piece === "object" && piece && "color" in piece ? piece.color : piece;
     if (!color) return null;
 
     if (color === "special") {
@@ -129,7 +186,7 @@ export function TetrisBoard({
       );
     }
 
-    const shape = getShapeForColor(color, index);
+    const shape = getShapeForPiece(piece, index);
     if (!shape || shape.length === 0) {
       // 폴백: 색상 블럭만 표시
       return <div className={cn("w-full h-full rounded-sm", getBlockColor(color))} />;
@@ -206,17 +263,20 @@ export function TetrisBoard({
       {/* 대기 중인 블럭 영역 */}
       <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 flex-1">
         <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
-          {nextPieces.map((piece, index) => (
-            <div
-              key={index}
-              className={cn(
-                "aspect-square rounded-sm border",
-                "flex items-center justify-center shrink-0 min-h-12",
-              )}
-            >
-              {piece && getBlockPreview(piece, index)}
-            </div>
-          ))}
+          {nextPieces.map((piece, index) => {
+            const color = typeof piece === "object" && "color" in piece ? piece.color : piece;
+            return (
+              <div
+                key={index}
+                className={cn(
+                  "aspect-square rounded-sm border",
+                  "flex items-center justify-center shrink-0 min-h-12",
+                )}
+              >
+                {piece && getBlockPreview(piece, index)}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
