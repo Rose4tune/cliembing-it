@@ -135,6 +135,51 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       return errorResponse(result.error?.message || "팀을 생성할 수 없습니다", 500);
     }
 
+    const newTeam = result.data;
+
+    // 팀 생성 시 게임 세션도 함께 생성
+    // 초기 상태는 'idle'로 하고 싶지만 스키마에 없으므로,
+    // 일단 생성만 해두고 실제 사용 시 상태를 변경하는 방식 사용
+    // 또는 별도 컬럼(is_active)을 추가하는 것을 고려할 수 있음
+    // 현재는 'pending'을 초기 상태로 사용하되, 게임 승인 요청 시에만 활성화
+
+    // 관리자 ID 조회 (started_by_admin_id 필수 필드)
+    const adminResult = await executeSupabaseQuery(async () => {
+      return await supabase.from("users").select("id").eq("role", "admin").limit(1).maybeSingle();
+    });
+
+    const adminUserId =
+      adminResult.success && adminResult.data ? adminResult.data.id : session.user.id; // 관리자가 없으면 현재 사용자 ID 사용
+
+    // 게임 세션 생성 (초기 상태: 'idle' - 아직 게임 승인 요청 전)
+    const gameSessionResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("game_sessions")
+        .insert({
+          party_id: partyId,
+          team_id: newTeam.id,
+          game_type: "tetris",
+          status: "idle" as any, // 초기 상태 (게임 승인 요청 전)
+          started_by_admin_id: adminUserId,
+          lines_cleared: 0,
+          special_blocks_used: 0,
+          total_score: 0,
+        })
+        .select()
+        .single();
+    });
+
+    if (!gameSessionResult.success) {
+      console.error("게임 세션 생성 실패 (팀은 생성됨):", gameSessionResult.error);
+      // 게임 세션 생성 실패해도 팀 생성은 성공한 것으로 처리
+      // (나중에 수동으로 게임 세션을 생성할 수 있음)
+    } else {
+      console.log("✅ 팀 및 게임 세션 생성 완료:", {
+        teamId: newTeam.id,
+        gameSessionId: gameSessionResult.data?.id,
+      });
+    }
+
     return successResponse(result.data);
   } catch (error) {
     console.error("팀 생성 에러:", error);
@@ -235,6 +280,55 @@ export async function DELETE(
 
     const supabase = createAdminClient();
 
+    // 게임 세션 조회 (기록 확인용)
+    const gameSessionResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("game_sessions")
+        .select("id, total_score, lines_cleared, board_snapshot")
+        .eq("party_id", partyId)
+        .eq("team_id", teamId)
+        .maybeSingle();
+    });
+
+    // 게임 진행 기록 확인 (점수나 블럭 사용 기록이 있는지)
+    const hasGameRecords =
+      gameSessionResult.success &&
+      gameSessionResult.data &&
+      ((gameSessionResult.data.total_score && gameSessionResult.data.total_score > 0) ||
+        (gameSessionResult.data.lines_cleared && gameSessionResult.data.lines_cleared > 0) ||
+        gameSessionResult.data.board_snapshot);
+
+    if (hasGameRecords) {
+      // 게임 기록이 있으면 게임 세션을 완전 삭제하지 않고 비활성화
+      // TODO: 스키마에 is_active 플래그가 있으면 false로 설정
+      // 현재는 cancelled 상태로 변경하여 비활성화 표시
+      const deactivateResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("game_sessions")
+          .update({ status: "cancelled" as any }) // 기록 보존을 위해 cancelled로 표시
+          .eq("party_id", partyId)
+          .eq("team_id", teamId);
+      });
+
+      if (!deactivateResult.success) {
+        console.warn("게임 세션 비활성화 실패 (팀 삭제는 계속 진행):", deactivateResult.error);
+      }
+    } else {
+      // 게임 기록이 없으면 게임 세션 삭제
+      const deleteSessionResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("game_sessions")
+          .delete()
+          .eq("party_id", partyId)
+          .eq("team_id", teamId);
+      });
+
+      if (!deleteSessionResult.success) {
+        console.warn("게임 세션 삭제 실패 (팀 삭제는 계속 진행):", deleteSessionResult.error);
+      }
+    }
+
+    // 팀 삭제
     const result = await executeSupabaseQuery(async () => {
       return await supabase.from("teams").delete().eq("id", teamId).eq("party_id", partyId);
     });

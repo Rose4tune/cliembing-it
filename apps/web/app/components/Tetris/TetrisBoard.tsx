@@ -241,7 +241,7 @@ export function TetrisBoard({
                 <div
                   key={`${rowIndex}-${colIndex}`}
                   className={cn(
-                    "aspect-square border border-gray-700 rounded-sm",
+                    "aspect-square",
                     getBlockColor(block),
                     isCurrent && "ring-2 ring-white ring-opacity-50",
                     isSpecialLine && "relative",

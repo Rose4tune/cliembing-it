@@ -280,9 +280,11 @@ export default function ApprovalsPage() {
                         <div className="text-sm text-muted-foreground mt-1">
                           상태: {request.status === "pending" ? "승인 대기" : request.status}
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          요청 시간: {new Date(request.requested_at).toLocaleString("ko-KR")}
-                        </div>
+                        {request.requested_at && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            요청 시간: {new Date(request.requested_at).toLocaleString("ko-KR")}
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <Button

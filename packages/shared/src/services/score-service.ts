@@ -7,8 +7,8 @@ import type { ClimbingLevel, LevelPointsConfig } from "../score-calculation";
 import {
   calculateScoreForLevel,
   calculateTotalScore,
-  isScoreEligible,
 } from "../score-calculation";
+import { isScoreEligible } from "../level";
 
 /**
  * 사용자의 총 점수 재계산 및 집계 테이블 업데이트
@@ -177,19 +177,5 @@ export async function recalculateUserTotalScore(
   }
 }
 
-/**
- * 단일 레벨 점수 계산 (점수 저장 시 사용)
- */
-export function calculateLevelScore(
-  level: ClimbingLevel,
-  problemCount: number,
-  userBaseLevel: ClimbingLevel,
-  levelPointsConfig?: LevelPointsConfig | null,
-): number {
-  return calculateScoreForLevel(
-    level,
-    problemCount,
-    userBaseLevel,
-    levelPointsConfig,
-  );
-}
+// calculateLevelScore는 score-calculation.ts에서 이미 export되므로
+// 여기서는 제거 (중복 export 방지)

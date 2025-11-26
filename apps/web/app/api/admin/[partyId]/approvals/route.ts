@@ -218,8 +218,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
           id,
           team_id,
           status,
-          created_at,
           started_at,
+          leader_confirmed_at,
           teams:team_id (
             id,
             name
@@ -228,7 +228,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         )
         .eq("party_id", partyId)
         .eq("status", "pending")
-        .order("created_at", { ascending: false });
+        .order("id", { ascending: false }); // created_at이 없으므로 id로 정렬
+    });
+
+    console.log("🔍 게임 요청 조회 결과:", {
+      success: gameRequestsResult.success,
+      dataCount: gameRequestsResult.data?.length || 0,
+      data: gameRequestsResult.data,
+      error: gameRequestsResult.error,
     });
 
     const gameRequests =
@@ -238,9 +245,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
             team_id: gs.team_id,
             team_name: gs.teams?.name || "알 수 없음",
             status: gs.status,
-            requested_at: gs.created_at,
+            // pending 상태일 때는 started_at이 null이므로, id를 기반으로 시간을 추정하거나 null 허용
+            requested_at: gs.started_at || gs.leader_confirmed_at || new Date().toISOString(), // null 방지
           }))
         : [];
+
+    console.log("✅ 반환할 게임 요청:", gameRequests);
 
     return successResponse({
       scores: scoresResult.success ? scoresResult.data || [] : [],
@@ -282,21 +292,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       const supabase = createAdminClient();
 
       // 게임 세션 상태 업데이트
-      const newStatus = action === "approve_game" ? "running" : "cancelled";
+      // approve_game: pending → ready (관리자 승인 완료, 참가자 게임 시작 대기)
+      // reject_game: pending → cancelled (게임 요청 거부)
+      const newStatus = action === "approve_game" ? "ready" : "cancelled";
       const adminUserId = session.user.id;
 
       const updateData: {
         status: string;
-        started_at?: string;
         started_by_admin_id?: string;
-        updated_at: string;
       } = {
         status: newStatus,
-        updated_at: new Date().toISOString(),
+        // updated_at 컬럼이 없으므로 제거
       };
 
       if (action === "approve_game") {
-        updateData.started_at = new Date().toISOString();
+        // ready 상태에서는 started_at을 설정하지 않음 (게임 시작 전이므로)
+        // started_at은 참가자가 게임 시작 버튼을 눌렀을 때 설정됨
         updateData.started_by_admin_id = adminUserId; // 승인한 관리자 ID로 업데이트
       }
 
@@ -425,6 +436,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
 
       // 2. 블럭 획득 처리 (problem_count만큼 블럭 추가)
       const problemCount = result.data.problem_count || 1;
+      console.log("🔍 블럭 추가 호출 시작:", {
+        partyId,
+        userId,
+        solvedLevel,
+        scoreId,
+        problemCount,
+      });
+
       const blockResult = await addBlockForScoreApproval(
         supabase,
         partyId,
@@ -433,8 +452,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
         scoreId,
         problemCount, // 문제 개수만큼 블럭 추가
       );
+
+      console.log("🔍 블럭 추가 결과:", {
+        success: blockResult.success,
+        blockAdded: blockResult.blockAdded,
+        error: blockResult.error,
+      });
+
       if (!blockResult.success && blockResult.error) {
-        console.error("블럭 추가 실패:", blockResult.error);
+        console.error("❌ 블럭 추가 실패:", blockResult.error);
         // 블럭 추가 실패도 로그만 남기고 계속 진행
       }
 
