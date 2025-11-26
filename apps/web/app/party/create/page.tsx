@@ -37,6 +37,7 @@ function CreatePartyForm() {
     location: "",
     maxParticipants: 20,
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // URL 쿼리 파라미터에서 제목 가져오기
   useEffect(() => {
@@ -97,6 +98,11 @@ function CreatePartyForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // 중복 요청 방지
+    if (isSubmitting) {
+      return;
+    }
+
     if (!isFormValid()) {
       // 종료 시간이 시작 시간보다 나중인지 확인
       if (formData.date && formData.time && formData.endDate && formData.endTime) {
@@ -117,6 +123,8 @@ function CreatePartyForm() {
       alert("파티 생성은 관리자만 가능합니다.");
       return;
     }
+
+    setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/party/create", {
@@ -156,7 +164,9 @@ function CreatePartyForm() {
       alert(
         error instanceof Error ? error.message : "파티 생성에 실패했습니다. 다시 시도해주세요.",
       );
+      setIsSubmitting(false); // 에러 발생 시 다시 시도 가능하도록
     }
+    // 성공 시에는 리다이렉트되므로 setIsSubmitting(false) 불필요
   };
 
   const handleCancel = () => {
@@ -362,9 +372,9 @@ function CreatePartyForm() {
                   type="submit"
                   variant="primary"
                   className="flex-1"
-                  disabled={!isFormValid()}
+                  disabled={!isFormValid() || isSubmitting}
                 >
-                  파티 생성하기
+                  {isSubmitting ? "생성 중..." : "파티 생성하기"}
                 </Button>
               </div>
             </form>
