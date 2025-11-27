@@ -38,6 +38,7 @@ export default function TeamsManagementPage() {
   const [editingTeam, setEditingTeam] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: "", color: "" });
   const [updatingLeaderId, setUpdatingLeaderId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -204,7 +205,7 @@ export default function TeamsManagementPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center ml-20">
+      <div className="flex min-h-screen flex-col items-center justify-center md:ml-20">
         <div className="text-muted-foreground">로딩 중...</div>
       </div>
     );
@@ -216,8 +217,8 @@ export default function TeamsManagementPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col ml-20">
-        <Header variant="login" title="팀 관리" />
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="팀 관리" onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
@@ -228,13 +229,13 @@ export default function TeamsManagementPage() {
             </CardContent>
           </Card>
         </main>
-        <AdminSidebar />
+        <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col ml-20">
+    <div className="flex min-h-screen flex-col md:ml-20">
       <Header variant="login" title="팀 관리" />
 
       <div className="flex flex-1">

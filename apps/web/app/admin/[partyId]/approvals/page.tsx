@@ -44,6 +44,7 @@ export default function ApprovalsPage() {
   const [gameRequests, setGameRequests] = useState<GameRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const fetchApprovals = useCallback(async () => {
     if (!partyId) return;
@@ -187,7 +188,7 @@ export default function ApprovalsPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center ml-20">
+      <div className="flex min-h-screen flex-col items-center justify-center md:ml-20">
         <div className="text-muted-foreground">로딩 중...</div>
       </div>
     );
@@ -199,8 +200,8 @@ export default function ApprovalsPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col ml-20">
-        <Header variant="login" title="승인 관리" />
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="승인 관리" onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
@@ -211,13 +212,13 @@ export default function ApprovalsPage() {
             </CardContent>
           </Card>
         </main>
-        <AdminSidebar />
+        <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col ml-20">
+    <div className="flex min-h-screen flex-col md:ml-20">
       <Header variant="login" title="승인 관리" />
 
       <main className="flex-1 container max-w-4xl mx-auto px-4 py-8 space-y-6 pb-6">

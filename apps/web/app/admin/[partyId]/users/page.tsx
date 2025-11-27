@@ -50,6 +50,7 @@ export default function UsersManagementPage() {
   const [editRole, setEditRole] = useState<string>("participant");
   const [teams, setTeams] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
   const [editBlockSet, setEditBlockSet] = useState<number | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -164,7 +165,7 @@ export default function UsersManagementPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center ml-20">
+      <div className="flex min-h-screen flex-col items-center justify-center md:ml-20">
         <div className="text-muted-foreground">로딩 중...</div>
       </div>
     );
@@ -176,8 +177,8 @@ export default function UsersManagementPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col ml-20">
-        <Header variant="login" title="팀/유저 관리" />
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="팀/유저 관리" onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
@@ -188,14 +189,14 @@ export default function UsersManagementPage() {
             </CardContent>
           </Card>
         </main>
-        <AdminSidebar />
+        <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col ml-20">
-      <Header variant="login" title="유저 관리" />
+    <div className="flex min-h-screen flex-col md:ml-20">
+      <Header variant="login" title="유저 관리" onMenuClick={() => setSidebarOpen(true)} />
 
       <div className="flex flex-1">
         <main className="flex-1 px-4 py-8 space-y-6 pb-6">

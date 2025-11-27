@@ -46,6 +46,7 @@ export default function RankingsPage() {
   const [challengeRankings, setChallengeRankings] = useState<ChallengeRanking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -94,8 +95,8 @@ export default function RankingsPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col ml-20">
-        <Header variant="login" title="전체 랭킹" />
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="전체 랭킹" onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
@@ -109,14 +110,14 @@ export default function RankingsPage() {
             </CardContent>
           </Card>
         </main>
-        <AdminSidebar />
+        <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col ml-20">
-      <Header variant="login" title="전체 랭킹" />
+    <div className="flex min-h-screen flex-col md:ml-20">
+      <Header variant="login" title="전체 랭킹" onMenuClick={() => setSidebarOpen(true)} />
 
       <main className="flex-1 container max-w-full mx-auto px-4 py-8 pb-6">
         {/* 4개 랭킹을 가로로 나열 */}
@@ -316,7 +317,7 @@ export default function RankingsPage() {
         </div>
       </main>
 
-      <AdminSidebar />
+      <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
     </div>
   );
 }

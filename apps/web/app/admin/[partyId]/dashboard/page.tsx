@@ -31,6 +31,7 @@ export default function AdminDashboardPage() {
   const [teams, setTeams] = useState<
     Array<{ id: string; name: string; gameSessionStatus?: string }>
   >([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // 인증 및 권한 체크
   useEffect(() => {
@@ -289,8 +290,8 @@ export default function AdminDashboardPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col ml-20">
-        <Header variant="login" title="파티 대시보드" />
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="파티 대시보드" onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
@@ -307,8 +308,8 @@ export default function AdminDashboardPage() {
 
   if (!party) {
     return (
-      <div className="flex min-h-screen flex-col ml-20">
-        <Header variant="login" title="파티 대시보드" />
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="파티 대시보드" onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
@@ -328,9 +329,9 @@ export default function AdminDashboardPage() {
   const statusLabel = PARTY_STATUS_LABELS[party.status as PartyStatus] || party.status;
 
   return (
-    <div className="flex min-h-screen flex-col ml-20">
-      <AdminSidebar />
-      <Header variant="login" title="파티 관리 대시보드" />
+    <div className="flex min-h-screen flex-col md:ml-20">
+      <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
+      <Header variant="login" title="파티 관리 대시보드" onMenuClick={() => setSidebarOpen(true)} />
 
       <main className="px-4 py-8 space-y-6">
         {/* 파티 정보 카드 */}

@@ -44,6 +44,7 @@ export default function ChallengesPage() {
   const [error, setError] = useState<string | null>(null);
   const [partyStatus, setPartyStatus] = useState<string | null>(null);
   const [partyEndAt, setPartyEndAt] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // 타이머 상태
   const [timerState, setTimerState] = useState<TimerState>("idle");
@@ -413,8 +414,8 @@ export default function ChallengesPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col ml-20">
-        <Header variant="login" title="챌린지 기록" />
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="챌린지 기록" onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
@@ -425,7 +426,7 @@ export default function ChallengesPage() {
             </CardContent>
           </Card>
         </main>
-        <AdminSidebar />
+        <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
       </div>
     );
   }
@@ -435,8 +436,8 @@ export default function ChallengesPage() {
   const isPartyEnded = partyEndAt && new Date(partyEndAt) < new Date();
 
   return (
-    <div className="flex min-h-screen flex-col ml-20">
-      <Header variant="login" title="챌린지 기록" />
+    <div className="flex min-h-screen flex-col md:ml-20">
+      <Header variant="login" title="챌린지 기록" onMenuClick={() => setSidebarOpen(true)} />
 
       <main className="flex-1 container max-w-md mx-auto px-4 py-8 pb-6">
         {/* 팀 선택 (상단) */}
@@ -607,7 +608,7 @@ export default function ChallengesPage() {
         </Card>
       </main>
 
-      <AdminSidebar />
+      <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
 
       {/* 시작 확인 다이얼로그 */}
       <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
