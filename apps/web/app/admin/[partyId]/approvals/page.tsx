@@ -7,8 +7,9 @@ import { Header } from "../../../components/Header";
 import { AdminSidebar } from "../../../components/AdminSidebar";
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
-import { CheckCircle, XCircle, Clock, GamepadIcon } from "lucide-react";
+import { CheckCircle, XCircle, Clock, GamepadIcon, Play } from "lucide-react";
 import { createClient } from "@pkg/supabase/client";
+import type { Party } from "@pkg/shared";
 
 type ScoreApproval = {
   id: string;
@@ -45,6 +46,10 @@ export default function ApprovalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [party, setParty] = useState<Party | null>(null);
+  const [teams, setTeams] = useState<
+    Array<{ id: string; name: string; gameSessionStatus?: string }>
+  >([]);
 
   const fetchApprovals = useCallback(async () => {
     if (!partyId) return;
@@ -219,7 +224,7 @@ export default function ApprovalsPage() {
 
   return (
     <div className="flex min-h-screen flex-col md:ml-20">
-      <Header variant="login" title="승인 관리" />
+      <Header variant="login" title="승인 관리" onMenuClick={() => setSidebarOpen(true)} />
 
       <main className="flex-1 container max-w-4xl mx-auto px-4 py-8 space-y-6 pb-6">
         {/* 점수 승인 */}
@@ -368,9 +373,66 @@ export default function ApprovalsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* 팀 게임 상태 카드 */}
+        {/* {party?.status === "running" && (
+          <Card className="max-w-[600px]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Play className="h-5 w-5" />팀 게임 상태
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm text-muted-foreground mb-4">
+                게임 시작 요청은 <strong>승인 관리</strong> 페이지에서 승인할 수 있습니다.
+              </div>
+              {teams.length === 0 ? (
+                <div className="text-center text-muted-foreground py-4">팀이 없습니다.</div>
+              ) : (
+                <div className="space-y-3">
+                  {teams.map((team) => {
+                    const gameStatus = team.gameSessionStatus;
+                    const isGamePending = gameStatus === "pending";
+                    const isGameRunning = gameStatus === "running";
+                    const isGameFinished = gameStatus === "finished";
+
+                    return (
+                      <div
+                        key={team.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div>
+                          <div className="font-medium">{team.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {isGamePending && "게임 시작 요청 대기 중 (승인 관리에서 승인 가능)"}
+                            {isGameRunning && "게임 진행 중"}
+                            {isGameFinished && "게임 완료"}
+                            {!gameStatus && "게임 시작 가능"}
+                          </div>
+                        </div>
+                        {isGamePending && (
+                          <span className="text-sm text-yellow-600 font-semibold">승인 대기</span>
+                        )}
+                        {isGameRunning && (
+                          <span className="text-sm text-green-600 font-semibold">진행 중</span>
+                        )}
+                        {isGameFinished && (
+                          <span className="text-sm text-blue-600 font-semibold">완료</span>
+                        )}
+                        {!gameStatus && (
+                          <span className="text-sm text-muted-foreground">대기 중</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )} */}
       </main>
 
-      <AdminSidebar />
+      <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
     </div>
   );
 }

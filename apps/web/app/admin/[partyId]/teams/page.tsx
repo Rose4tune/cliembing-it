@@ -236,7 +236,7 @@ export default function TeamsManagementPage() {
 
   return (
     <div className="flex min-h-screen flex-col md:ml-20">
-      <Header variant="login" title="팀 관리" />
+      <Header variant="login" title="팀 관리" onMenuClick={() => setSidebarOpen(true)} />
 
       <div className="flex flex-1">
         <main className="flex-1 px-4 py-8 space-y-6 pb-6">

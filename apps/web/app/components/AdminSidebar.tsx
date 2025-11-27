@@ -5,7 +5,7 @@ import { usePathname, useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Settings, Users, User, CheckCircle, Trophy, Clock, Home, X } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
-import { Dialog, DialogContent } from "@pkg/ui-web";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
 
 type NavItem = {
@@ -145,8 +145,9 @@ export function AdminSidebar({ open, onOpenChange }: AdminSidebarProps) {
       {/* 모바일 다이얼로그 */}
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md p-0">
+          <DialogDescription className="sr-only">관리자 메뉴를 선택하세요</DialogDescription>
           <div className="p-4 border-b flex items-center justify-between">
-            <h2 className="text-lg font-semibold">메뉴</h2>
+            <DialogTitle className="text-lg font-semibold">메뉴</DialogTitle>
             <Button
               variant="ghost"
               size="icon"
