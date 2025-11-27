@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Home, GamepadIcon, User, LayoutDashboard } from "lucide-react";
+import { Home, User } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
 
 type NavItem = {
@@ -20,18 +20,18 @@ const navItems: NavItem[] = [
     label: "홈",
     icon: Home,
   },
-  {
-    href: "/game",
-    label: "게임",
-    icon: GamepadIcon,
-    activeLabel: "대시보드",
-  },
-  {
-    href: "/rankboard",
-    label: "대시보드",
-    icon: LayoutDashboard,
-    requiresAuth: true,
-  },
+  // {
+  //   href: "/game",
+  //   label: "게임",
+  //   icon: GamepadIcon,
+  //   activeLabel: "대시보드",
+  // },
+  // {
+  //   href: "/rankboard",
+  //   label: "대시보드",
+  //   icon: LayoutDashboard,
+  //   requiresAuth: true,
+  // },
   {
     href: "/profile",
     label: "프로필",
@@ -45,6 +45,8 @@ export function FooterNavigation() {
   const { data: session } = useSession();
 
   const isPartyActive = false;
+  // 관리자 대시보드 경로인지 확인
+  const isAdminDashboard = pathname?.startsWith("/admin/") && pathname?.includes("/dashboard");
 
   const visibleItems = navItems.filter((item) => {
     if (isPartyActive && item.href === "/profile") {
@@ -67,6 +69,12 @@ export function FooterNavigation() {
     return item;
   });
 
+  // 관리자 대시보드일 때는 AdminSidebar 사용 (별도 컴포넌트로 처리)
+  if (isAdminDashboard) {
+    return null; // AdminSidebar는 각 페이지에서 직접 렌더링
+  }
+
+  // 일반 페이지일 때는 하단 네비게이션
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
       <div className="container mx-auto flex items-center justify-around px-4">

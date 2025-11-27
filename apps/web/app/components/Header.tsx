@@ -3,10 +3,11 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@pkg/ui-web";
-import { Moon, Sun, ArrowLeft } from "lucide-react";
+import { Moon, Sun, ArrowLeft, User, Shield, Menu } from "lucide-react";
+import { useViewMode } from "../contexts/ViewModeContext";
 
 interface HeaderProps {
   variant?: "default" | "login" | "dashboard";
@@ -15,6 +16,7 @@ interface HeaderProps {
   userName?: string;
   team?: string;
   level?: string;
+  onMenuClick?: () => void;
 }
 
 export function Header({
@@ -24,15 +26,49 @@ export function Header({
   userName,
   team,
   level,
+  onMenuClick,
 }: HeaderProps) {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const { viewMode, changeViewMode, isAdminView } = useViewMode();
+  const [permissions, setPermissions] = useState<{
+    isAdmin?: boolean;
+    isStaff?: boolean;
+    canToggle?: boolean;
+  }>({});
+
+  // 관리자 페이지인지 확인
+  const isAdminPage = pathname?.startsWith("/admin/");
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // 권한 정보 조회
+  useEffect(() => {
+    if (!session) return;
+
+    const fetchPermissions = async () => {
+      try {
+        const response = await fetch("/api/user/permissions");
+        const result = await response.json();
+        if (result.success) {
+          setPermissions({
+            isAdmin: result.data.isAdmin,
+            isStaff: result.data.isStaff,
+            canToggle: result.data.isAdmin || result.data.isStaff,
+          });
+        }
+      } catch (error) {
+        console.error("권한 조회 실패:", error);
+      }
+    };
+
+    fetchPermissions();
+  }, [session]);
 
   if (variant === "login") {
     return (
@@ -42,7 +78,20 @@ export function Header({
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-lg font-semibold">{title || "로그인"}</h1>
-          <div className="w-9" /> {/* Spacer for centering */}
+          {/* 모바일에서 관리자 페이지일 때만 메뉴 버튼 표시 */}
+          {isAdminPage && onMenuClick ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onMenuClick}
+              aria-label="메뉴 열기"
+              className="md:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          ) : (
+            <div className="w-9" /> // Spacer for centering
+          )}
         </div>
       </header>
     );
@@ -51,7 +100,7 @@ export function Header({
   if (variant === "dashboard") {
     return (
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-        <div className="container mx-auto px-4 py-3">
+        <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-lg text-primary font-bold">Cliembing It!</p>
@@ -99,6 +148,31 @@ export function Header({
               aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+          )}
+
+          {/* 권한 전환 버튼 (관리자/스탭만 표시) */}
+          {session && permissions.canToggle && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                changeViewMode(isAdminView ? "user" : permissions.isAdmin ? "admin" : "staff")
+              }
+              className="text-xs"
+              title={isAdminView ? "일반 모드로 전환" : "관리자 모드로 전환"}
+            >
+              {isAdminView ? (
+                <>
+                  <User className="h-4 w-4 mr-1" />
+                  일반
+                </>
+              ) : (
+                <>
+                  <Shield className="h-4 w-4 mr-1" />
+                  {permissions.isAdmin ? "관리자" : "스탭"}
+                </>
+              )}
             </Button>
           )}
 

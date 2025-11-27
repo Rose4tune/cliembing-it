@@ -1,30 +1,73 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Header } from "../components/Header";
 import { FooterNavigation } from "../components/FooterNavigation";
 import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@pkg/ui-web";
-import {
-  Edit2,
-  ChevronDown,
-  Trophy,
-  GamepadIcon,
-  Users,
-  Star,
-  Flame,
-  Crown,
-  Shield,
-  Check,
-} from "lucide-react";
+import { Edit2, Trophy, Check, X } from "lucide-react";
+import { LEVEL_LABELS, ALL_LEVELS, type ClimbingLevel } from "@pkg/shared";
+import { PARTY_STATUS_LABELS, PARTY_STATUS_COLORS, type PartyStatus } from "@pkg/shared";
+
+interface PartyInfo {
+  id: string;
+  name: string;
+  status: PartyStatus;
+  startAt: string | null;
+  endAt: string | null;
+  createdAt: string;
+}
 
 export default function ProfilePage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState("김클라임");
-  const [email, setEmail] = useState("climb@example.com");
-  const [phone, setPhone] = useState("010-1234-5678");
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [level, setLevel] = useState<ClimbingLevel | null>(null);
+  const [editingLevel, setEditingLevel] = useState<ClimbingLevel | null>(null);
+  const [parties, setParties] = useState<PartyInfo[]>([]);
+  const [_isDeleting, setIsDeleting] = useState(false);
+  const [originalData, setOriginalData] = useState<{
+    name: string;
+    email: string;
+    level: ClimbingLevel | null;
+  }>({ name: "", email: "", level: null });
+
+  // 프로필 데이터 조회
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/user/profile");
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          const userData = {
+            name: result.data.user.nickname || "",
+            email: result.data.user.email || "",
+            level: result.data.user.level,
+          };
+          setName(userData.name);
+          setEmail(userData.email);
+          setLevel(userData.level);
+          setOriginalData(userData);
+          setParties(result.data.parties || []);
+        }
+      } catch (error) {
+        console.error("프로필 조회 에러:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (session) {
+      fetchProfile();
+    }
+  }, [session]);
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: "/" });
@@ -55,77 +98,65 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSave = () => {
-    // TODO: API 호출로 저장
-    setIsEditing(false);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nickname: name.trim(),
+          email: email.trim() || null,
+          level: editingLevel !== null ? editingLevel : level,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        alert(result.error || "프로필 수정에 실패했습니다");
+        setSaving(false);
+        return;
+      }
+
+      // 수정된 데이터로 상태 업데이트
+      if (result.data.user) {
+        setName(result.data.user.nickname || "");
+        setEmail(result.data.user.email || "");
+        setLevel(result.data.user.level);
+        setOriginalData({
+          name: result.data.user.nickname || "",
+          email: result.data.user.email || "",
+          level: result.data.user.level,
+        });
+      }
+
+      // alert(result.data.message || "프로필이 수정되었습니다");
+      setIsEditing(false);
+      setEditingLevel(null);
+    } catch (error) {
+      console.error("프로필 수정 에러:", error);
+      alert("프로필 수정 중 오류가 발생했습니다");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
     // 편집 취소 시 원래 값으로 복원
-    setName("김클라임");
-    setEmail("climb@example.com");
-    setPhone("010-1234-5678");
+    setName(originalData.name);
+    setEmail(originalData.email);
+    setLevel(originalData.level);
+    setEditingLevel(null);
     setIsEditing(false);
   };
 
-  const achievements = [
-    {
-      id: 1,
-      title: "첫 파티 참가",
-      description: "첫 번째 파티에 참가했습니다",
-      icon: Trophy,
-      achieved: true,
-    },
-    {
-      id: 2,
-      title: "V5 정복자",
-      description: "V5 레벨 문제를 완등했습니다",
-      icon: Trophy,
-      achieved: true,
-    },
-    {
-      id: 3,
-      title: "테트리스 마스터",
-      description: "테트리스에서 5000점 이상 달성",
-      icon: GamepadIcon,
-      achieved: true,
-    },
-    {
-      id: 4,
-      title: "팀 플레이어",
-      description: "5개 이상의 파티에 참가했습니다",
-      icon: Users,
-      achieved: true,
-    },
-    {
-      id: 5,
-      title: "특수 블록 수집가",
-      description: "특수 블록을 50개 이상 사용했습니다",
-      icon: Star,
-      achieved: true,
-    },
-    {
-      id: 6,
-      title: "연속 완등왕",
-      description: "한 파티에서 10문제 이상 완등",
-      icon: Flame,
-      achieved: true,
-    },
-    {
-      id: 7,
-      title: "레벨 도전자",
-      description: "V7 이상 레벨 도전",
-      icon: Crown,
-      achieved: true,
-    },
-    {
-      id: 8,
-      title: "파티 베테랑",
-      description: "10개 이상의 파티에 참가",
-      icon: Shield,
-      achieved: true,
-    },
-  ];
+  const handleEditClick = () => {
+    setEditingLevel(level);
+    setIsEditing(true);
+  };
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -138,54 +169,99 @@ export default function ProfilePage() {
             <div className="flex items-center gap-4">
               {/* Avatar */}
               <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center shrink-0">
-                <span className="text-2xl font-bold text-primary-foreground">V5</span>
+                <span className="text-2xl font-bold text-primary-foreground">
+                  {level ? LEVEL_LABELS[level].charAt(0) : "?"}
+                </span>
               </div>
 
               {/* User Info */}
               <div className="flex-1 space-y-2">
                 {isEditing ? (
                   <>
-                    <div className="flex items-center gap-2">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="닉네임"
+                          className="flex-1"
+                        />
+                      </div>
                       <Input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="flex-1"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        type="email"
+                        placeholder="이메일"
+                        className="w-full"
                       />
-                      <Button variant="ghost" size="icon" onClick={handleSave} aria-label="저장">
-                        <ChevronDown className="h-5 w-5" />
+                      {/* 레벨 선택 */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">기본 레벨</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {ALL_LEVELS.map((lvl) => (
+                            <Button
+                              key={lvl}
+                              variant={editingLevel === lvl ? "primary" : "outline"}
+                              size="sm"
+                              onClick={() => setEditingLevel(lvl)}
+                              className="w-full"
+                            >
+                              {LEVEL_LABELS[lvl]}
+                            </Button>
+                          ))}
+                          <Button
+                            variant={editingLevel === null ? "primary" : "outline"}
+                            size="sm"
+                            onClick={() => setEditingLevel(null)}
+                            className="w-full"
+                          >
+                            미설정
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={handleCancel}
+                        disabled={saving}
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        취소
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={handleCancel} aria-label="취소">
-                        <ChevronDown className="h-5 w-5 rotate-180" />
+                      <Button
+                        variant="primary"
+                        className="flex-1"
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
+                        <Check className="h-4 w-4 mr-1" />
+                        {saving ? "저장 중..." : "저장"}
                       </Button>
                     </div>
-                    <Input
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      type="email"
-                      className="w-full"
-                    />
-                    <Input
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      type="tel"
-                      className="w-full"
-                    />
                   </>
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-xl font-bold">{name}</h2>
+                      <h2 className="text-xl font-bold">{name || "사용자"}</h2>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setIsEditing(true)}
+                        onClick={handleEditClick}
                         aria-label="편집"
                       >
                         <Edit2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground">{email}</p>
-                    <p className="text-sm text-muted-foreground">{phone}</p>
+                    <p className="text-sm text-muted-foreground">{email || "이메일 없음"}</p>
+                    {level ? (
+                      <p className="text-sm text-muted-foreground">
+                        기본 레벨: {LEVEL_LABELS[level]}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">기본 레벨: 미설정</p>
+                    )}
 
                     <Button onClick={handleSignOut} variant="secondary" className="w-full">
                       로그아웃
@@ -206,26 +282,51 @@ export default function ProfilePage() {
             <CardTitle>참가한 파티</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">볼더링 파티 #2024</h3>
-                    <span className="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
-                      진행중
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">2024-01-15</p>
-                  <p className="text-xs text-muted-foreground">레드팀 • 2450점</p>
-                </div>
-                <Trophy className="h-5 w-5 text-primary shrink-0" />
+            {loading ? (
+              <div className="text-center text-muted-foreground py-4">로딩 중...</div>
+            ) : parties.length === 0 ? (
+              <div className="text-center text-muted-foreground py-4">참가한 파티가 없습니다</div>
+            ) : (
+              <div className="space-y-4">
+                {parties.map((party) => {
+                  const statusColor =
+                    PARTY_STATUS_COLORS[party.status as PartyStatus] || "bg-gray-100 text-gray-800";
+                  const statusLabel =
+                    PARTY_STATUS_LABELS[party.status as PartyStatus] || party.status;
+                  const dateStr = party.startAt
+                    ? new Date(party.startAt).toLocaleDateString("ko-KR", {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                      })
+                    : null;
+
+                  return (
+                    <div
+                      key={party.id}
+                      className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                      onClick={() => router.push(`/rankboard/${party.id}`)}
+                    >
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold">{party.name}</h3>
+                          <span className={`text-xs px-2 py-0.5 rounded ${statusColor}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        {dateStr && <p className="text-xs text-muted-foreground">{dateStr}</p>}
+                      </div>
+                      <Trophy className="h-5 w-5 text-primary shrink-0" />
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Achievement Collection */}
-        <Card>
+        {/* Achievement Collection - 숨김 처리 (추후 사용 예정) */}
+        {/* <Card>
           <CardHeader>
             <CardTitle>업적 컬렉션</CardTitle>
           </CardHeader>
@@ -250,7 +351,7 @@ export default function ProfilePage() {
               })}
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
       </main>
 
       <FooterNavigation />
