@@ -2,6 +2,18 @@ import { getServerSession, authOptions } from "@pkg/auth";
 import { createServerClient, createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
 
+/**
+ * "5분 23초" 형식의 문자열을 밀리초로 변환
+ */
+function parseDurationToMs(duration: string | null): number {
+  if (!duration) return Infinity;
+  const minuteMatch = duration.match(/(\d+)분/);
+  const secondMatch = duration.match(/(\d+)초/);
+  const minutes = minuteMatch ? parseInt(minuteMatch[1], 10) : 0;
+  const seconds = secondMatch ? parseInt(secondMatch[1], 10) : 0;
+  return (minutes * 60 + seconds) * 1000;
+}
+
 type TeamMember = {
   name: string;
   level: string;
@@ -65,7 +77,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     let cruxRankings: any[] = [];
     let gripRankings: any[] = [];
     let teamRankings: any[] = [];
-    const challengeRankings: any[] = [];
+    let challengeRankings: any[] = [];
 
     // Crux 그룹 랭킹 조회 (SQL 함수 사용)
     const cruxResult = await executeSupabaseQuery(async () => {
@@ -218,6 +230,100 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
           members: team.teamId ? membersMap.get(team.teamId) || [] : [],
         }));
       }
+    }
+
+    // 챌린지 랭킹 계산
+    if (allTeamsResult.success && allTeamsResult.data) {
+      const allTeamIds = allTeamsResult.data.map((team: any) => team.id);
+
+      // 챌린지 기록 조회
+      const challengeRecordsResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("challenge_records")
+          .select("team_id, attempt_number, duration, status, started_at")
+          .eq("party_id", partyId)
+          .in("team_id", allTeamIds)
+          .neq("status", "invalidated");
+      });
+
+      // 팀별로 최고 기록 찾기
+      const teamChallengeMap = new Map<string, any>();
+      if (challengeRecordsResult.success && challengeRecordsResult.data) {
+        challengeRecordsResult.data.forEach((record: any) => {
+          if (record.status === "failed") return; // 실패 기록은 랭킹 계산에서 제외
+
+          const teamId = record.team_id;
+          if (!teamChallengeMap.has(teamId)) {
+            teamChallengeMap.set(teamId, {
+              bestTime: record.duration,
+              bestStartedAt: record.started_at,
+              attempts: 0,
+              failures: 0,
+            });
+          }
+
+          const teamData = teamChallengeMap.get(teamId);
+          teamData.attempts += 1;
+          if (record.status === "failed") {
+            teamData.failures += 1;
+          }
+
+          // 더 빠른 시간 찾기 (duration을 밀리초로 변환하여 비교)
+          const currentBest = parseDurationToMs(teamData.bestTime);
+          const recordTime = parseDurationToMs(record.duration);
+          if (recordTime < currentBest) {
+            teamData.bestTime = record.duration;
+            teamData.bestStartedAt = record.started_at;
+          }
+        });
+      }
+
+      // 모든 팀에 대해 챌린지 랭킹 생성
+      challengeRankings = allTeamsResult.data.map((team: any) => {
+        const teamData = teamChallengeMap.get(team.id);
+        const attempts = teamData?.attempts || 0;
+        const failures = teamData?.failures || 0;
+        const bestTime = teamData?.bestTime || null;
+
+        return {
+          teamId: team.id,
+          teamName: team.name,
+          bestTime: bestTime,
+          attempts: attempts,
+          failures: failures,
+          status: attempts === 2 && failures === 2 ? "all_failed" : "success",
+        };
+      });
+
+      // 랭킹 정렬: 성공한 기록이 우선, 시간 순, 동일 시간이면 선착순
+      challengeRankings.sort((a, b) => {
+        // 성공 기록이 우선
+        if (a.status === "all_failed" && b.status !== "all_failed") return 1;
+        if (a.status !== "all_failed" && b.status === "all_failed") return -1;
+
+        // 둘 다 실패면 동일 순위
+        if (a.status === "all_failed" && b.status === "all_failed") return 0;
+
+        // 둘 다 성공이면 시간 비교
+        if (a.bestTime && b.bestTime) {
+          const aTime = parseDurationToMs(a.bestTime);
+          const bTime = parseDurationToMs(b.bestTime);
+          if (aTime !== bTime) {
+            return aTime - bTime; // 빠른 시간이 우선
+          }
+        }
+
+        // 시간이 같거나 없으면 팀 번호 순
+        const aNumber = parseInt(a.teamName.match(/(\d+)/)?.[1] || "0", 10);
+        const bNumber = parseInt(b.teamName.match(/(\d+)/)?.[1] || "0", 10);
+        return aNumber - bNumber;
+      });
+
+      // 랭킹 할당
+      challengeRankings = challengeRankings.map((team, index) => ({
+        ...team,
+        rank: index + 1,
+      }));
     }
 
     // 파티 참가자 수 및 팀 수 계산

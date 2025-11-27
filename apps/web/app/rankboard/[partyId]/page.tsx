@@ -71,7 +71,8 @@ export default function RankboardPage() {
       teamName?: string;
       attempts?: number;
       failures?: number;
-      time?: string;
+      bestTime?: string | null;
+      status?: "success" | "all_failed";
     }>;
   } | null>(null);
   const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
@@ -305,17 +306,6 @@ export default function RankboardPage() {
   const currentGroupRankings = activeSubTab === "crux" ? cruxRankings : gripRankings;
   const teamRankings = rankingData.team || [];
   const challengeRankings = rankingData.challenge || [];
-  const challengeList =
-    challengeRankings.length > 0
-      ? challengeRankings
-      : teamRankings.map((team) => ({
-          rank: team.rank,
-          teamId: team.teamId,
-          teamName: team.teamName || `${team.teamNumber}조`,
-          attempts: 0,
-          failures: 0,
-          time: "--:--",
-        }));
   const partyInfo = rankingData.party;
 
   return (
@@ -500,38 +490,60 @@ export default function RankboardPage() {
           )}
 
           {activeTab === "challenge" && (
-            <div className="space-y-4">
-              <p className="text-gray-400 text-right">Taken Time</p>
-              <div className="space-y-2">
-                {challengeList.map((item, index) => (
-                  <Card
-                    key={`${item.teamId || index}-${index}`}
-                    className={cn(
-                      "p-4 border transition-all",
-                      currentTeamId && item.teamId === currentTeamId ? "border-primary" : "",
-                    )}
-                  >
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="w-6 flex justify-center">
-                            {getRankIcon(item.rank || index + 1)}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-semibold">{item.teamName || "팀 정보 없음"}</p>
-                            <div className="text-xs text-muted-foreground space-y-0.5">
-                              <p>도전 가능 횟수: {item.attempts ?? 0}</p>
-                              <p>실패 횟수: {item.failures ?? 0}</p>
+            <Card>
+              <CardContent className="pt-6">
+                {rankingData.challenge.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    챌린지 기록이 없습니다.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {rankingData.challenge.map((item) => {
+                      const isFailed = item.status === "all_failed";
+                      const displayTime = isFailed ? "-분 -초" : item.bestTime || "--:--";
+
+                      return (
+                        <div
+                          key={item.teamId}
+                          className={cn(
+                            "flex items-center justify-between p-3 border rounded-lg",
+                            currentTeamId && item.teamId === currentTeamId
+                              ? "border-primary border-2"
+                              : "",
+                          )}
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="w-6 flex justify-center flex-shrink-0">
+                              {getRankIcon(item.rank || 0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm truncate">
+                                {item.teamName || "팀 정보 없음"}
+                              </p>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {item.attempts !== undefined && (
+                                  <span>
+                                    도전: {item.attempts}/2
+                                    {item.failures !== undefined && item.failures > 0 && (
+                                      <span className="ml-1 text-red-600">
+                                        (실패: {item.failures})
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
+                          <div className="text-sm font-semibold flex-shrink-0 ml-2">
+                            {displayTime}
+                          </div>
                         </div>
-                        <span className="text-sm font-semibold">{item.time || "--:--"}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
         </div>
       </main>

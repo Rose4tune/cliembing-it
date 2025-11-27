@@ -266,10 +266,10 @@ export default function RankingsPage() {
           </Card>
 
           {/* 챌린지 랭킹 */}
-          <Card className="flex-shrink-0 w-80">
+          <Card className="flex-shrink-0 w-80 max-h-[600px] overflow-y-auto">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
+                <Target className="h-5 w-5 text-green-500" />
                 챌린지 랭킹
               </CardTitle>
             </CardHeader>
@@ -279,35 +279,38 @@ export default function RankingsPage() {
                   챌린지 기록이 없습니다.
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                  {challengeRankings.map((ranking) => (
-                    <div
-                      key={ranking.teamId}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
-                            ranking.rank === 1
-                              ? "bg-yellow-500 text-white"
-                              : ranking.rank === 2
-                                ? "bg-gray-400 text-white"
-                                : ranking.rank === 3
-                                  ? "bg-orange-600 text-white"
-                                  : "bg-muted"
-                          }`}
-                        >
-                          {ranking.rank}
+                <div className="space-y-2">
+                  {challengeRankings.map((ranking) => {
+                    const isFailed = ranking.status === "all_failed";
+                    const displayTime = isFailed ? "-분 -초" : ranking.time || "--:--";
+
+                    return (
+                      <div
+                        key={ranking.teamId}
+                        className="flex items-center justify-between p-2 border rounded-lg"
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="w-6 flex justify-center font-bold flex-shrink-0">
+                            {ranking.rank}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm truncate">{ranking.teamName}</div>
+                            {ranking.attempts !== undefined && (
+                              <div className="text-xs text-muted-foreground">
+                                {ranking.attempts}/2
+                                {ranking.failures !== undefined && ranking.failures > 0 && (
+                                  <span className="ml-1 text-red-600">
+                                    (실패: {ranking.failures})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-sm truncate">{ranking.teamName}</div>
-                        </div>
+                        <div className="text-sm font-bold flex-shrink-0 ml-2">{displayTime}</div>
                       </div>
-                      <div className="text-sm font-bold flex-shrink-0 ml-2">
-                        {ranking.time || "--:--"}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
