@@ -279,8 +279,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           message: "게임 시작 요청이 전송되었습니다",
         });
       } else if (existingSession.status === "pending") {
-        // pending 상태는 비활성화 상태 (팀 삭제됨)이므로 재요청 불가
-        return errorResponse("게임 세션이 비활성화되어 있습니다. 팀 관리자에게 문의하세요.", 403);
+        // pending 상태는 게임 데이터 있음, 게임 재요청 가능
+        // pending → requesting으로 변경 (승인 대기 상태)
+        const updateResult = await executeSupabaseQuery(async () => {
+          return await supabase
+            .from("game_sessions")
+            .update({
+              status: "requesting" as GameStatus,
+            })
+            .eq("id", existingSession.id)
+            .select()
+            .single();
+        });
+
+        if (!updateResult.success || !updateResult.data) {
+          return errorResponse("게임 세션 상태 변경에 실패했습니다", 500);
+        }
+
+        return successResponse({
+          data: updateResult.data,
+          message: "게임 시작 요청이 전송되었습니다",
+        });
       } else if (existingSession.status === "idle") {
         // idle 상태는 비활성 상태 (팀 삭제 등)이므로 재요청 불가
         return errorResponse("게임 세션이 비활성화되어 있습니다. 팀 관리자에게 문의하세요.", 403);
@@ -407,7 +426,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           .eq("party_id", partyId)
           .eq("team_id", teamId)
           .is("game_session_id", null) // 사용 가능한 블럭만 조회
-          .order("id", { ascending: true });
+          .order("created_at", { ascending: true });
       });
 
       if (blocksResult.success && blocksResult.data) {
@@ -460,7 +479,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
 
     if (action === "finish") {
       // 게임 종료: status='finished', total_score 저장, 사용한 블럭들을 game_session_id로 마킹
-      const { data: existingSession } = await executeSupabaseQuery(async () => {
+      const existingSessionResult = await executeSupabaseQuery(async () => {
         return await supabase
           .from("game_sessions")
           .select("id, board_snapshot")
@@ -472,11 +491,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           .maybeSingle();
       });
 
-      if (!existingSession?.success || !existingSession.data) {
+      if (!existingSessionResult.success || !existingSessionResult.data) {
         return errorResponse("종료할 게임 세션을 찾을 수 없습니다", 404);
       }
 
-      const gameSessionId = existingSession.data.id;
+      const gameSessionId = existingSessionResult.data.id;
 
       const finalSnapshot: BoardSnapshot = boardSnapshot || {
         board: Array(20)
@@ -627,7 +646,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       });
 
       const partyStatus = partyResult.success && partyResult.data ? partyResult.data.status : null;
-      // 파티가 진행 중이면 pending으로 변경 (비활성화), 아니면 cancelled로 변경 (파티 종료)
+      // 파티가 진행 중이면 pending으로 변경 (게임 재요청 가능), 아니면 cancelled로 변경 (파티 종료)
       const newStatus =
         partyStatus === "running" ? ("pending" as GameStatus) : ("cancelled" as GameStatus);
 

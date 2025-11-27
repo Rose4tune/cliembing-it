@@ -114,6 +114,12 @@ export function getColorForBlockType(blockType: BlockType): BlockColor {
 
 /**
  * 보드에 블럭이 배치 가능한지 체크
+ * @param board 게임 보드
+ * @param piece 블럭
+ * @param dx x 방향 이동 거리
+ * @param dy y 방향 이동 거리
+ * @param rotatedShape 회전된 모양 (선택적)
+ * @param checkOnlyFinalPosition true면 최종 위치만 체크 (특수 블럭 확정 시 사용)
  */
 export function canPlacePiece(
   board: BlockColor[][],
@@ -121,10 +127,12 @@ export function canPlacePiece(
   dx: number = 0,
   dy: number = 0,
   rotatedShape?: number[][],
+  checkOnlyFinalPosition: boolean = false,
 ): boolean {
   const shape = rotatedShape || piece.shape;
   const newX = piece.x + dx;
   const newY = piece.y + dy;
+  const isSpecial = piece.color === "special";
 
   // 보드 범위 체크
   for (let row = 0; row < shape.length; row++) {
@@ -138,9 +146,31 @@ export function canPlacePiece(
           return false;
         }
 
-        // 이미 블럭이 있는 곳
-        if (board[boardY]?.[boardX]) {
-          return false;
+        // 특수 블럭의 경우: 이동 경로에서는 다른 블럭을 지나갈 수 있음
+        // 하지만 최종 위치는 빈 칸이어야 함
+        if (isSpecial) {
+          if (checkOnlyFinalPosition) {
+            // 최종 위치 체크: 빈 칸이어야 함
+            if (board[boardY]?.[boardX]) {
+              return false;
+            }
+          } else {
+            // 이동 경로 체크: 특수 블럭은 다른 블럭이 있어도 지나갈 수 있음
+            // dx, dy가 0이 아니면 이동 중이므로 경로 체크 완화
+            // dx, dy가 0이면 최종 위치 체크: 빈 칸이어야 함
+            if (dx === 0 && dy === 0) {
+              // 최종 위치: 빈 칸이어야 함
+              if (board[boardY]?.[boardX]) {
+                return false;
+              }
+            }
+            // 이동 중 (dx !== 0 || dy !== 0): 다른 블럭이 있어도 지나갈 수 있음 (체크하지 않음)
+          }
+        } else {
+          // 일반 블럭: 이미 블럭이 있는 곳이면 불가
+          if (board[boardY]?.[boardX]) {
+            return false;
+          }
         }
       }
     }
