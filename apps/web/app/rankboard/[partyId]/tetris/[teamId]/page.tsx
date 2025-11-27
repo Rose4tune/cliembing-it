@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { Header } from "../../../../components/Header";
@@ -234,13 +234,93 @@ export default function TetrisPage() {
               mappedState = "pending";
             }
             setGameState(mappedState);
-            if (session.board_state) {
+
+            // board_snapshot이 있으면 board와 availableBlocks 복원 (우선순위 높음)
+            if (session.board_snapshot) {
+              const snapshot = session.board_snapshot as {
+                board?: any[][];
+                availableBlocks?: Array<{ id: string; block_type: string }> | string[];
+              };
+
+              // board 복원
+              if (snapshot.board && Array.isArray(snapshot.board)) {
+                setBoard(snapshot.board);
+                console.log("✅ board_snapshot에서 board 복원 완료");
+              }
+
+              // availableBlocks 복원
+              if (snapshot.availableBlocks && Array.isArray(snapshot.availableBlocks)) {
+                const blockTypeMap: Record<string, BlockColor> = {
+                  special: "special",
+                  S: "red",
+                  I: "purple",
+                  "L-right": "orange",
+                  T: "blue",
+                  Z: "green",
+                  "L-left": "yellow",
+                  O: "pink",
+                };
+
+                // availableBlocks가 객체 배열인지 문자열 배열인지 확인
+                const convertedPieces = snapshot.availableBlocks
+                  .map(
+                    (
+                      block: any,
+                      index: number,
+                    ): { id: string; type: string; color: BlockColor } | null => {
+                      // 문자열 배열인 경우 (하위 호환성)
+                      if (typeof block === "string") {
+                        const color = blockTypeMap[block] || null;
+                        if (!color) return null;
+                        return {
+                          id: `temp-${Date.now()}-${index}`,
+                          type: block,
+                          color,
+                        };
+                      }
+                      // 객체 배열인 경우
+                      if (typeof block === "object" && block !== null) {
+                        const blockType = block.block_type || block.type || block;
+                        const blockId = block.id || `temp-${Date.now()}-${index}`;
+                        const color = blockTypeMap[blockType] || null;
+                        if (!color) return null;
+                        return {
+                          id: blockId,
+                          type: blockType,
+                          color,
+                        };
+                      }
+                      return null;
+                    },
+                  )
+                  .filter(
+                    (
+                      block: { id: string; type: string; color: BlockColor } | null,
+                    ): block is { id: string; type: string; color: BlockColor } => block !== null,
+                  ) as Array<{ id: string; type: string; color: BlockColor }>;
+
+                if (convertedPieces.length > 0) {
+                  setRemainingPieces(convertedPieces);
+                  console.log(
+                    "✅ board_snapshot에서 availableBlocks 복원 완료:",
+                    convertedPieces.length,
+                    "개",
+                  );
+                }
+              }
+            } else if (session.board_state) {
+              // 하위 호환성: board_state 사용
               setBoard(session.board_state);
             }
+
             setCompletedLines(session.completed_lines || 0);
 
-            // 게임 세션의 availableBlocks를 remainingPieces로 변환
-            if (session.current_pieces && Array.isArray(session.current_pieces)) {
+            // 게임 세션의 current_pieces를 remainingPieces로 변환 (board_snapshot이 없을 때만)
+            if (
+              !session.board_snapshot &&
+              session.current_pieces &&
+              Array.isArray(session.current_pieces)
+            ) {
               const blockTypeMap: Record<string, BlockColor> = {
                 special: "special",
                 S: "red",
@@ -291,9 +371,10 @@ export default function TetrisPage() {
             return;
           }
 
-          // 게임이 진행 중이 아닐 때만 전체 블럭 조회 (게임 진행 중이면 게임 세션의 블럭 사용)
+          // 게임 진행 중이 아닐 때: 전체 블럭 조회 (사용 가능한 블럭만)
+          // 게임 진행 중일 때: board_snapshot의 availableBlocks 사용, + 새로 승인받은 블럭 추가
           if (!gameSessionData || gameSessionData.status !== "running") {
-            // 팀의 획득한 블럭 조회 (team_block_events에서)
+            // 팀의 획득한 블럭 조회 (team_block_events에서, 사용 가능한 블럭만)
             const blocksResponse = await fetch(
               `/api/party/${partyId}/team-blocks?teamId=${currentTeamId}`,
             );
@@ -346,28 +427,100 @@ export default function TetrisPage() {
               console.error("블럭 조회 실패:", await blocksResponse.text());
             }
           } else {
-            // 게임 진행 중이면 게임 세션의 블럭 사용
-            if (gameSessionData.current_pieces) {
-              // 게임 세션의 블럭이 이미 올바른 형식인지 확인
-              const pieces = gameSessionData.current_pieces;
-              if (Array.isArray(pieces) && pieces.length > 0) {
-                // 첫 번째 블럭이 객체 형식인지 확인 (id 포함)
-                if (
-                  typeof pieces[0] === "object" &&
-                  "id" in pieces[0] &&
-                  "type" in pieces[0] &&
-                  "color" in pieces[0]
-                ) {
-                  setRemainingPieces(
-                    pieces as Array<{ id: string; type: string; color: BlockColor }>,
-                  );
-                } else {
-                  // BlockColor[] 형식이면 변환 필요 (하지만 타입 정보가 없으므로 빈 배열로)
-                  console.warn("게임 세션의 블럭 형식이 예상과 다릅니다:", pieces);
-                  setRemainingPieces([]);
+            // 게임 진행 중: board_snapshot에서 복원된 블럭 사용
+            // + 새로 승인받은 블럭 추가 (게임 중에도 새 블럭 획득 가능)
+            // board_snapshot이 없거나 availableBlocks가 없으면 새로 조회
+            if (
+              !gameSessionData.board_snapshot?.availableBlocks ||
+              (Array.isArray(gameSessionData.board_snapshot.availableBlocks) &&
+                gameSessionData.board_snapshot.availableBlocks.length === 0)
+            ) {
+              // board_snapshot에 블럭이 없으면 전체 블럭 조회
+              const blocksResponse = await fetch(
+                `/api/party/${partyId}/team-blocks?teamId=${currentTeamId}`,
+              );
+              if (blocksResponse.ok) {
+                const blocksResult = await blocksResponse.json();
+                if (blocksResult.success && blocksResult.data?.blocks) {
+                  const blocks: Array<{ id: string; type: string; color: BlockColor }> =
+                    blocksResult.data.blocks
+                      .map(
+                        (block: {
+                          id: string;
+                          block_type: string;
+                        }): { id: string; type: string; color: BlockColor } | null => {
+                          const blockTypeMap: Record<string, BlockColor> = {
+                            special: "special",
+                            S: "red",
+                            I: "purple",
+                            "L-right": "orange",
+                            T: "blue",
+                            Z: "green",
+                            "L-left": "yellow",
+                            O: "pink",
+                          };
+                          const color = blockTypeMap[block.block_type] || null;
+                          if (!color) return null;
+                          return { id: block.id, type: block.block_type || "", color };
+                        },
+                      )
+                      .filter(
+                        (
+                          block: { id: string; type: string; color: BlockColor } | null,
+                        ): block is { id: string; type: string; color: BlockColor } =>
+                          block !== null,
+                      );
+                  setRemainingPieces(blocks);
+                  console.log("✅ 게임 진행 중: 블럭 조회 완료:", blocks.length, "개");
                 }
-              } else {
-                setRemainingPieces([]);
+              }
+            } else {
+              // board_snapshot에서 복원된 블럭이 있으면, 새로 승인받은 블럭만 추가
+              const blocksResponse = await fetch(
+                `/api/party/${partyId}/team-blocks?teamId=${currentTeamId}`,
+              );
+              if (blocksResponse.ok) {
+                const blocksResult = await blocksResponse.json();
+                if (blocksResult.success && blocksResult.data?.blocks) {
+                  const newBlocks: Array<{ id: string; type: string; color: BlockColor }> =
+                    blocksResult.data.blocks
+                      .map(
+                        (block: {
+                          id: string;
+                          block_type: string;
+                        }): { id: string; type: string; color: BlockColor } | null => {
+                          const blockTypeMap: Record<string, BlockColor> = {
+                            special: "special",
+                            S: "red",
+                            I: "purple",
+                            "L-right": "orange",
+                            T: "blue",
+                            Z: "green",
+                            "L-left": "yellow",
+                            O: "pink",
+                          };
+                          const color = blockTypeMap[block.block_type] || null;
+                          if (!color) return null;
+                          return { id: block.id, type: block.block_type || "", color };
+                        },
+                      )
+                      .filter(
+                        (
+                          block: { id: string; type: string; color: BlockColor } | null,
+                        ): block is { id: string; type: string; color: BlockColor } =>
+                          block !== null,
+                      );
+
+                  // 기존 remainingPieces와 새 블럭 합치기 (중복 제거)
+                  setRemainingPieces((prev) => {
+                    const existingIds = new Set(prev.map((p) => p.id));
+                    const uniqueNewBlocks = newBlocks.filter((b) => !existingIds.has(b.id));
+                    if (uniqueNewBlocks.length > 0) {
+                      console.log("✅ 새로 승인받은 블럭 추가:", uniqueNewBlocks.length, "개");
+                    }
+                    return [...prev, ...uniqueNewBlocks];
+                  });
+                }
               }
             }
           }
@@ -800,7 +953,51 @@ export default function TetrisPage() {
 
             if (consumeResponse.ok) {
               // 블럭 소비 성공: remainingPieces에서 제거
-              setRemainingPieces((prev) => prev.slice(1));
+              setRemainingPieces((prev) => {
+                const updated = prev.slice(1);
+                // 남은 블럭이 0개이고 현재 블럭도 없으면 게임 세션을 pending으로 변경
+                if (updated.length === 0 && !currentPiece && partyId && teamId) {
+                  // 블럭이 모두 소진되었으므로 게임 세션을 pending으로 변경 (파티 진행 중이면)
+                  fetch(`/api/party/${partyId}/game-session`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      teamId,
+                      action: "finish", // finish 액션이 파티 상태에 따라 pending 또는 finished로 변경
+                      boardSnapshot: {
+                        board: newBoard,
+                        availableBlocks: [],
+                      },
+                      totalScore: newScore,
+                      completedLines: newCompletedLines,
+                    }),
+                  })
+                    .then(async (response) => {
+                      if (response.ok) {
+                        const result = await response.json();
+                        if (result.success) {
+                          // API에서 파티 상태를 확인하여 pending 또는 finished로 설정됨
+                          const sessionStatus = result.data?.status;
+                          if (sessionStatus === "pending") {
+                            setGameState("pending");
+                            console.log("✅ 블럭 모두 소진: 게임 세션 상태 pending으로 변경 완료");
+                          } else if (sessionStatus === "finished") {
+                            setGameState("finished");
+                            // 랭킹 업데이트
+                            fetch(`/api/admin/${partyId}/rankings/calculate`, {
+                              method: "POST",
+                            }).catch((err) => console.error("랭킹 계산 실패:", err));
+                            console.log("✅ 블럭 모두 소진: 게임 세션 상태 finished로 변경 완료");
+                          }
+                        }
+                      } else {
+                        console.error("게임 세션 상태 변경 실패:", await response.text());
+                      }
+                    })
+                    .catch((err) => console.error("게임 세션 상태 변경 에러:", err));
+                }
+                return updated;
+              });
             } else {
               console.error("블럭 소비 실패:", await consumeResponse.text());
             }
@@ -1002,21 +1199,36 @@ export default function TetrisPage() {
 
       const result = await response.json();
       if (response.ok && result.success) {
-        setGameState("finished");
-        // 랭킹 업데이트 큐에 추가
-        await fetch(`/api/admin/${partyId}/rankings/calculate`, {
-          method: "POST",
-        });
+        // API에서 파티 상태에 따라 pending 또는 finished로 설정됨
+        // API 응답의 status를 확인하여 게임 상태 설정
+        const sessionStatus = result.data?.status;
+        if (sessionStatus === "pending") {
+          setGameState("pending");
+        } else if (sessionStatus === "finished") {
+          setGameState("finished");
+          // 랭킹 업데이트 큐에 추가
+          await fetch(`/api/admin/${partyId}/rankings/calculate`, {
+            method: "POST",
+          });
+        } else {
+          // 기본값은 finished로 설정
+          setGameState("finished");
+        }
       }
     } catch (error) {
       console.error("게임 종료 처리 에러:", error);
     }
   }, [partyId, teamId, board, completedLines, calculateGameScore]);
 
-  // 게임 종료 체크
+  // 게임 종료 체크 (블럭 소비 후 즉시 처리하므로 이 체크는 보조용)
+  // 주로 블럭 소비 로직에서 처리되지만, 다른 경로로 블럭이 모두 소진될 수 있으므로 유지
   useEffect(() => {
     if (gameState === "running" && remainingPieces.length === 0 && !currentPiece) {
-      handleFinishGame();
+      // 블럭 소비 로직에서 이미 처리했을 수 있으므로 짧은 딜레이 후 확인
+      const timer = setTimeout(() => {
+        handleFinishGame();
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [gameState, remainingPieces, currentPiece, handleFinishGame]);
 
@@ -1101,10 +1313,36 @@ export default function TetrisPage() {
   }, [gameState, isSpecialBlock, board, handlePieceLock]);
 
   // 게임 상태 주기적 저장 (30초마다)
+  // useRef를 사용하여 최신 값들을 참조하도록 함 (dependency array 최소화)
+  const boardRef = useRef(board);
+  const remainingPiecesRef = useRef(remainingPieces);
+  const completedLinesRef = useRef(completedLines);
+  const calculateGameScoreRef = useRef(calculateGameScore);
+
+  // ref 업데이트
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+  useEffect(() => {
+    remainingPiecesRef.current = remainingPieces;
+  }, [remainingPieces]);
+  useEffect(() => {
+    completedLinesRef.current = completedLines;
+  }, [completedLines]);
+  useEffect(() => {
+    calculateGameScoreRef.current = calculateGameScore;
+  }, [calculateGameScore]);
+
   useEffect(() => {
     if (gameState !== "running" || !partyId || !teamId) return;
 
     const interval = setInterval(() => {
+      // 최신 값들을 ref에서 가져옴
+      const currentBoard = boardRef.current;
+      const currentRemainingPieces = remainingPiecesRef.current;
+      const currentCompletedLines = completedLinesRef.current;
+      const currentCalculateGameScore = calculateGameScoreRef.current;
+
       fetch(`/api/party/${partyId}/game-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1112,20 +1350,33 @@ export default function TetrisPage() {
           teamId,
           action: "update",
           boardSnapshot: {
-            board: board,
-            availableBlocks: remainingPieces.map((p) => ({
+            board: currentBoard,
+            availableBlocks: currentRemainingPieces.map((p) => ({
               id: p.id,
               block_type: p.type,
             })),
           },
-          totalScore: calculateGameScore(),
-          completedLines,
+          totalScore: currentCalculateGameScore(),
+          completedLines: currentCompletedLines,
         }),
-      }).catch((err) => console.error("게임 상태 주기적 저장 실패:", err));
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "알 수 없는 오류" }));
+            // 404 에러는 로그를 남기지 않음 (게임 세션이 없는 경우)
+            if (response.status !== 404) {
+              console.error("게임 상태 주기적 저장 실패:", response.status, errorData.error);
+            }
+          }
+        })
+        .catch((err) => {
+          // 네트워크 에러 등만 로그
+          console.error("게임 상태 주기적 저장 에러:", err);
+        });
     }, 30000); // 30초마다
 
     return () => clearInterval(interval);
-  }, [gameState, partyId, teamId, board, remainingPieces, completedLines, calculateGameScore]);
+  }, [gameState, partyId, teamId]); // dependency array 최소화
 
   // ⚠️ 폴링 제거됨: Realtime 구독으로 대체됨
   // 게임 세션 상태 변경은 Realtime 구독을 통해 실시간으로 감지됩니다.

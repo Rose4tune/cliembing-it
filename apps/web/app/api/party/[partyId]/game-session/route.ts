@@ -536,7 +536,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
 
     if (action === "update") {
       // 게임 진행 중 업데이트: board_snapshot만 업데이트
-      const { data: existingSession } = await executeSupabaseQuery(async () => {
+      const existingSessionResult = await executeSupabaseQuery(async () => {
         return await supabase
           .from("game_sessions")
           .select("id")
@@ -548,7 +548,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           .maybeSingle();
       });
 
-      if (!existingSession?.data) {
+      if (!existingSessionResult.success || !existingSessionResult.data) {
         return errorResponse("업데이트할 게임 세션을 찾을 수 없습니다", 404);
       }
 
@@ -556,7 +556,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
         return errorResponse("boardSnapshot이 필요합니다", 400);
       }
 
-      const { data, error } = await executeSupabaseQuery(async () => {
+      const updateResult = await executeSupabaseQuery(async () => {
         return await supabase
           .from("game_sessions")
           .update({
@@ -564,16 +564,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
             lines_cleared: completedLines || 0,
             total_score: totalScore || 0,
           })
-          .eq("id", existingSession.data.id)
+          .eq("id", existingSessionResult.data!.id)
           .select()
           .single();
       });
 
-      if (error) {
-        return errorResponse(error.message || "게임 세션 업데이트에 실패했습니다", 500);
+      if (!updateResult.success || !updateResult.data) {
+        return errorResponse(
+          updateResult.error?.message || "게임 세션 업데이트에 실패했습니다",
+          500,
+        );
       }
 
-      return successResponse({ data });
+      return successResponse({ data: updateResult.data });
     }
 
     if (action === "cancel") {
