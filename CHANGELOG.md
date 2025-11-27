@@ -1,3 +1,7 @@
+## <small>0.1.6 (2025-11-27)</small>
+
+- fix: 일반 클라이언트 → Service Role Key로 변경 ([49a4cf3](https://github.com/Rose4tune/cliembing-it/commit/49a4cf3))
+
 ## <small>0.1.5 (2025-11-27)</small>
 
 - fix: 일반 클라이언트 → Service Role Key로 변경 ([ff2430b](https://github.com/Rose4tune/cliembing-it/commit/ff2430b))
