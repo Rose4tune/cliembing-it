@@ -56,16 +56,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         id: string;
         block_type: string;
         created_at: string;
-        value: number;
         submission_id: string | null;
       }>
     >(async () => {
       const result = await adminClient
         .from("team_block_events")
-        .select("id, block_type, created_at, value, submission_id")
+        .select("id, block_type, created_at, submission_id")
         .eq("party_id", partyId)
         .eq("team_id", teamId)
-        .is("game_session_id", null)
+        .is("game_session_id", null) // 사용 가능한 블럭만 조회
         .order("created_at", { ascending: true });
 
       // submission_id가 null인 블럭 필터링 (서버 사이드)
@@ -93,23 +92,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
 
     const blocks = fallbackResult.data || [];
 
-    // value만큼 블럭을 배열로 펼치기
-    const expandedBlocks: Array<{
-      id: string;
-      block_type: string;
-      created_at: string;
-    }> = [];
-
-    blocks.forEach((block) => {
-      const count = block.value || 1;
-      for (let i = 0; i < count; i++) {
-        expandedBlocks.push({
-          id: `${block.id}-${i}`,
-          block_type: block.block_type || "",
-          created_at: block.created_at,
-        });
-      }
-    });
+    // 이미 개별 레코드이므로 확장 로직 불필요 (value는 항상 1)
+    const expandedBlocks = blocks.map((block) => ({
+      id: block.id, // 실제 ID 그대로 사용
+      block_type: block.block_type || "",
+      created_at: block.created_at,
+    }));
 
     console.log("✅ 블럭 조회 성공 (직접 쿼리):", {
       partyId,
@@ -129,6 +117,69 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     });
   } catch (error) {
     console.error("팀 블럭 조회 에러:", error);
+    return errorResponse(error instanceof Error ? error.message : "서버 오류가 발생했습니다", 500);
+  }
+}
+
+/**
+ * 팀 블럭 추가 API (특수 블럭 획득 등)
+ * POST /api/party/[partyId]/team-blocks
+ */
+export async function POST(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return errorResponse("인증이 필요합니다", 401);
+    }
+
+    const { partyId } = await params;
+    const body = await request.json();
+    const { teamId, blockType, source } = body as {
+      teamId: string;
+      blockType: string;
+      source: string;
+    };
+
+    if (!teamId || !blockType || !source) {
+      return errorResponse("teamId, blockType, source가 필요합니다", 400);
+    }
+
+    const userId = (session.user as { id?: string })?.id;
+    if (!userId) {
+      return errorResponse("사용자 ID를 찾을 수 없습니다", 400);
+    }
+
+    // 관리자 클라이언트 사용
+    const adminClient = createAdminClient();
+
+    // team_block_events에 블럭 추가
+    const { data: insertedData, error: insertError } = await executeSupabaseQuery(async () => {
+      return await adminClient
+        .from("team_block_events")
+        .insert({
+          party_id: partyId,
+          team_id: teamId,
+          submission_id: null,
+          source: source as any, // 'height_threshold' 등
+          block_type: blockType,
+          value: 1,
+          game_session_id: null,
+        })
+        .select("id")
+        .single();
+    });
+
+    if (insertError || !insertedData) {
+      console.error("블럭 추가 실패:", insertError);
+      return errorResponse(insertError?.message || "블럭 추가에 실패했습니다", 500);
+    }
+
+    return successResponse({
+      blockId: insertedData.id,
+      message: "블럭이 추가되었습니다",
+    });
+  } catch (error) {
+    console.error("팀 블럭 추가 에러:", error);
     return errorResponse(error instanceof Error ? error.message : "서버 오류가 발생했습니다", 500);
   }
 }

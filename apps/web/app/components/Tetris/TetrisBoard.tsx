@@ -26,7 +26,7 @@ interface TetrisBoardProps {
 export function TetrisBoard({
   board,
   currentPiece,
-  specialLines = [5, 10, 15],
+  specialLines = [4, 9, 14, 19],
   nextPieces = [],
 }: TetrisBoardProps) {
   // 보드와 현재 조각을 합쳐서 표시
@@ -247,11 +247,9 @@ export function TetrisBoard({
                     isSpecialLine && "relative",
                   )}
                 >
-                  {/* 특수 라인 표시 */}
+                  {/* 특수 라인 표시 - 블럭이 있든 없든 항상 표시 */}
                   {isSpecialLine && (
-                    <div className="absolute inset-0 border-t-2 border-yellow-400 opacity-50 flex items-center justify-end pr-1">
-                      {/* <span className="text-xs text-yellow-400 font-bold">특수</span> */}
-                    </div>
+                    <div className="absolute inset-0 border-t-2 border-yellow-400 opacity-50 z-10 pointer-events-none" />
                   )}
                 </div>
               );

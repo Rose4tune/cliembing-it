@@ -305,9 +305,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     if (action === "begin") {
       // 팀장이 게임 시작: ready → running, board_snapshot 설정
       // ready 상태에서 running으로 변경 (관리자 승인 완료, 참가자 게임 시작)
-      const { data: existingSession } = await executeSupabaseQuery(async () => {
-        // 먼저 running 상태 조회 (이미 게임이 시작된 경우)
-        const runningSession = await supabase
+
+      // 먼저 running 상태 조회 (이미 게임이 시작된 경우)
+      const runningSessionResult = await executeSupabaseQuery(async () => {
+        return await supabase
           .from("game_sessions")
           .select("id, status")
           .eq("party_id", partyId)
@@ -316,39 +317,74 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           .order("started_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-
-        if (runningSession.data) {
-          return runningSession;
-        }
-
-        // running이 없으면 ready 조회 (관리자 승인 완료, 게임 시작 대기)
-        return await supabase
-          .from("game_sessions")
-          .select("id, status")
-          .eq("party_id", partyId)
-          .eq("team_id", teamId)
-          .eq("status", "ready")
-          .order("id", { ascending: false })
-          .limit(1)
-          .maybeSingle();
       });
 
-      if (!existingSession?.data) {
+      let existingSession: { id: string; status: string } | null = null;
+
+      console.log("🔍 [게임 시작] running 세션 조회 결과:", {
+        success: runningSessionResult.success,
+        hasData: !!runningSessionResult.data,
+        data: runningSessionResult.data,
+        error: runningSessionResult.error,
+      });
+
+      if (runningSessionResult.success && runningSessionResult.data) {
+        existingSession = runningSessionResult.data;
+        console.log("✅ [게임 시작] running 세션 찾음:", existingSession);
+      } else {
+        // running이 없으면 ready 조회 (관리자 승인 완료, 게임 시작 대기)
+        const readySessionResult = await executeSupabaseQuery(async () => {
+          return await supabase
+            .from("game_sessions")
+            .select("id, status")
+            .eq("party_id", partyId)
+            .eq("team_id", teamId)
+            .eq("status", "ready")
+            .order("id", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        });
+
+        console.log("🔍 [게임 시작] ready 세션 조회 결과:", {
+          success: readySessionResult.success,
+          hasData: !!readySessionResult.data,
+          data: readySessionResult.data,
+          error: readySessionResult.error,
+        });
+
+        if (readySessionResult.success && readySessionResult.data) {
+          existingSession = readySessionResult.data;
+          console.log("✅ [게임 시작] ready 세션 찾음:", existingSession);
+        }
+      }
+
+      if (!existingSession) {
+        console.error("❌ [게임 시작] 세션을 찾을 수 없음:", {
+          partyId,
+          teamId,
+          runningResult: {
+            success: runningSessionResult.success,
+            data: runningSessionResult.data,
+            error: runningSessionResult.error,
+          },
+        });
         return errorResponse(
           "시작할 게임 세션을 찾을 수 없습니다. 관리자 승인을 기다려주세요.",
           404,
         );
       }
 
-      const isAlreadyRunning = existingSession.data.status === "running";
+      const isAlreadyRunning = existingSession.status === "running";
 
       // ready 상태가 아니고 running도 아니면 에러
-      if (!isAlreadyRunning && existingSession.data.status !== "ready") {
+      if (!isAlreadyRunning && existingSession.status !== "ready") {
         return errorResponse(
-          `게임을 시작할 수 없습니다. 현재 상태: ${existingSession.data.status}`,
+          `게임을 시작할 수 없습니다. 현재 상태: ${existingSession.status}`,
           400,
         );
       }
+
+      const gameSessionId = existingSession.id;
 
       // board_snapshot 생성
       const snapshot: BoardSnapshot = boardSnapshot || {
@@ -358,61 +394,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
         availableBlocks: [],
       };
 
-      // 팀 블럭 조회하여 availableBlocks 설정
+      // 팀 블럭 조회하여 availableBlocks 설정 (사용 가능한 블럭만: game_session_id IS NULL)
       const blocksResult = await executeSupabaseQuery<
         Array<{
           id: string;
           block_type: string;
-          value: number;
         }>
       >(async () => {
         return await supabase
           .from("team_block_events")
-          .select("id, block_type, value")
+          .select("id, block_type")
           .eq("party_id", partyId)
           .eq("team_id", teamId)
-          .is("game_session_id", null)
-          .order("id", { ascending: true }); // team_block_events.created_at은 있지만, id로 정렬해도 무방
+          .is("game_session_id", null) // 사용 가능한 블럭만 조회
+          .order("id", { ascending: true });
       });
 
-      const gameSessionId = existingSession.data?.id;
-      if (!gameSessionId) {
-        return errorResponse("게임 세션 ID를 찾을 수 없습니다", 404);
-      }
-
-      const blockIdsToMark: string[] = [];
-
       if (blocksResult.success && blocksResult.data) {
-        const expandedBlocks: Array<{ id: string; block_type: string }> = [];
-        blocksResult.data.forEach((block) => {
-          const count = block.value || 1;
-          // 이 블럭을 게임 세션에 사용할 것이므로 마킹할 ID 수집
-          blockIdsToMark.push(block.id);
-          for (let i = 0; i < count; i++) {
-            expandedBlocks.push({
-              id: `${block.id}-${i}`, // "team_block_events.id-index" 형식
-              block_type: block.block_type || "",
-            });
-          }
-        });
-        snapshot.availableBlocks = expandedBlocks;
-
-        // 게임 시작 시 사용할 블럭들을 game_session_id로 마킹
-        // 이렇게 하면 게임 종료 후 새로 승인받은 블럭만 조회됨
-        if (blockIdsToMark.length > 0) {
-          const { error: markError } = await supabase
-            .from("team_block_events")
-            .update({ game_session_id: gameSessionId })
-            .in("id", blockIdsToMark)
-            .eq("party_id", partyId)
-            .eq("team_id", teamId)
-            .is("game_session_id", null);
-
-          if (markError) {
-            console.error("게임 시작 시 블럭 마킹 실패:", markError);
-            // 블럭 마킹 실패해도 게임은 진행 가능하도록 계속 진행
-          }
-        }
+        // 이미 개별 레코드이므로 확장 로직 불필요 (value는 항상 1)
+        snapshot.availableBlocks = blocksResult.data.map((block) => ({
+          id: block.id, // 실제 team_block_events.id
+          block_type: block.block_type || "",
+        }));
+        console.log("🔍 [BEGIN] Populated availableBlocks:", snapshot.availableBlocks);
+        // 게임 시작 시 블럭 마킹 제거: 블럭 고정 시점에만 소비 처리
       }
 
       // 이미 running 상태이면 board_snapshot만 업데이트, 아니면 status와 started_at도 업데이트
@@ -443,7 +448,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
         return errorResponse(error.message || "게임 시작에 실패했습니다", 500);
       }
 
-      return successResponse({ data });
+      // 응답에 board_snapshot 포함
+      return successResponse({
+        id: data?.id,
+        status: data?.status,
+        board_snapshot: snapshot,
+        total_score: data?.total_score || 0,
+        completed_lines: data?.lines_cleared || 0,
+      });
     }
 
     if (action === "finish") {
@@ -639,6 +651,77 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       return successResponse({
         data,
         message: "게임 요청이 취소되었습니다",
+      });
+    }
+
+    if (action === "consume_block") {
+      // 블럭 소비: team_block_events.game_session_id 직접 업데이트
+      const { blockEventId } = body as { blockEventId: string };
+
+      if (!blockEventId) {
+        return errorResponse("blockEventId가 필요합니다", 400);
+      }
+
+      // 현재 running 상태의 게임 세션 찾기
+      const runningSessionResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("game_sessions")
+          .select("id")
+          .eq("party_id", partyId)
+          .eq("team_id", teamId)
+          .eq("status", "running")
+          .order("started_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+      });
+
+      console.log("🔍 [블럭 소비] running 세션 조회 결과:", {
+        success: runningSessionResult.success,
+        hasData: !!runningSessionResult.data,
+        data: runningSessionResult.data,
+        error: runningSessionResult.error,
+      });
+
+      if (!runningSessionResult.success || !runningSessionResult.data) {
+        return errorResponse("진행 중인 게임 세션을 찾을 수 없습니다", 404);
+      }
+
+      const gameSessionId = runningSessionResult.data.id;
+
+      // team_block_events에서 블럭 확인 및 game_session_id 직접 업데이트
+      const updateResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("team_block_events")
+          .update({ game_session_id: gameSessionId })
+          .eq("id", blockEventId)
+          .eq("party_id", partyId)
+          .eq("team_id", teamId)
+          .is("game_session_id", null) // 아직 사용되지 않은 블럭만 업데이트
+          .select("id, block_type")
+          .single();
+      });
+
+      console.log("🔍 [블럭 소비] 업데이트 결과:", {
+        success: updateResult.success,
+        hasData: !!updateResult.data,
+        data: updateResult.data,
+        error: updateResult.error,
+      });
+
+      if (!updateResult.success || !updateResult.data) {
+        // 업데이트된 레코드가 없으면 이미 사용되었거나 존재하지 않는 블럭
+        if (updateResult.error) {
+          console.error("블럭 소비 실패:", updateResult.error);
+        }
+        return errorResponse(
+          updateResult.error?.message || "블럭을 찾을 수 없거나 이미 사용되었습니다",
+          404,
+        );
+      }
+
+      return successResponse({
+        data: updateResult.data,
+        message: "블럭이 소비되었습니다",
       });
     }
 

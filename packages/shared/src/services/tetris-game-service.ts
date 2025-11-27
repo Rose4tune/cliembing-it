@@ -262,17 +262,24 @@ export function calculateScore(board: BlockColor[][]): number {
 }
 
 /**
- * 특수 블럭 획득 조건 체크 (5줄마다 1개)
+ * 특수 블럭 획득 조건 체크 (특수 라인 통과 시에만)
+ * 특수 라인: 높이 5, 10, 15, 20 (보드 인덱스: 4, 9, 14, 19)
  */
 export function checkSpecialBlockReward(
   currentHeight: number,
   previousHeight: number,
 ): boolean {
-  // 5줄 단위로 증가했는지 체크
-  const currentThreshold = Math.floor(currentHeight / 5);
-  const previousThreshold = Math.floor(previousHeight / 5);
+  // 특수 라인 위치 (높이 기준, 맨 아래가 높이 1)
+  const specialLineHeights = [5, 10, 15, 20];
 
-  return currentThreshold > previousThreshold;
+  // 현재 높이가 특수 라인을 넘었는지 체크 (이전 높이 < 특수 라인 <= 현재 높이)
+  for (const specialHeight of specialLineHeights) {
+    if (previousHeight < specialHeight && currentHeight >= specialHeight) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

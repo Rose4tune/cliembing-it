@@ -159,17 +159,17 @@ export async function addBlockForScoreApproval(
       };
     }
 
-    // 6. team_block_events에 블럭 추가 (problem_count만큼)
-    // 동일 레벨 2개 이상 승인 시 동일 블럭 2개 이상 스택에 쌓임
-    const blockData = {
+    // 6. team_block_events에 블럭 추가 (problem_count만큼 개별 레코드로 추가)
+    // value > 1인 블럭을 분리하여 각각 개별 레코드로 저장
+    const blocksToInsert = Array.from({ length: problemCount }, () => ({
       party_id: partyId,
       team_id: teamId,
       submission_id: submissionId || null,
-      source: "solve", // enum 값: solve, height_threshold, line_clear
+      source: "solve" as const, // enum 값: solve, height_threshold, line_clear
       block_type: blockTypeName,
-      value: problemCount, // 문제 개수만큼 블럭 추가
+      value: 1, // 항상 1 (개별 레코드)
       game_session_id: null, // 게임 시작 전이므로 null
-    };
+    }));
 
     console.log("🔍 블럭 추가 시도:", {
       partyId,
@@ -180,12 +180,12 @@ export async function addBlockForScoreApproval(
       problemCount,
       blockTypeName,
       isLeftBlock,
-      blockData,
+      blocksToInsert: blocksToInsert.length,
     });
 
     const { data: insertedData, error: insertError } = await supabase
       .from("team_block_events")
-      .insert(blockData)
+      .insert(blocksToInsert)
       .select();
 
     if (insertError) {

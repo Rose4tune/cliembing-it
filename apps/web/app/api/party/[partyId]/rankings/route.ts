@@ -106,51 +106,30 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         rank: index + 1, // 전체 개인 랭킹 순위 재계산
       }));
 
-    // 팀 랭킹이 없으면 game_sessions에서 계산
-    if (teamRankings.length === 0) {
-      // 모든 팀 조회
-      const teamsResult = await executeSupabaseQuery(async () => {
-        return await supabase.from("teams").select("id, name").eq("party_id", partyId);
+    // 팀 랭킹 조회 (get_team_rankings_with_details 함수 사용)
+    const teamRankingsResult = await executeSupabaseQuery(async () => {
+      return await supabase.rpc("get_team_rankings_with_details", {
+        p_party_id: partyId,
       });
+    });
 
-      if (teamsResult.success && teamsResult.data) {
-        // 각 팀의 테트리스 게임 점수 합산
-        const teamScoresPromises = teamsResult.data.map(
-          async (team: { id: string; name: string }) => {
-            const gameSessionsResult = await executeSupabaseQuery(async () => {
-              return await supabase
-                .from("game_sessions")
-                .select("team_score")
-                .eq("party_id", partyId)
-                .eq("team_id", team.id)
-                .eq("status", "finished");
-            });
+    if (teamRankingsResult.success && teamRankingsResult.data) {
+      teamRankings = teamRankingsResult.data.map((item: any) => {
+        // teamName에서 숫자 추출 (예: "1조" -> 1, "팀 2" -> 2)
+        const teamNumberMatch = item.team_name?.match(/(\d+)/);
+        const teamNumber = teamNumberMatch ? parseInt(teamNumberMatch[1], 10) : 0;
 
-            const totalScore =
-              gameSessionsResult.success && gameSessionsResult.data
-                ? gameSessionsResult.data.reduce(
-                    (sum: number, session: { team_score: number }) =>
-                      sum + (session.team_score || 0),
-                    0,
-                  )
-                : 0;
-
-            return {
-              teamId: team.id,
-              teamName: team.name,
-              totalScore,
-            };
-          },
-        );
-
-        const teamScores = await Promise.all(teamScoresPromises);
-        teamRankings = teamScores
-          .sort((a, b) => b.totalScore - a.totalScore)
-          .map((item, index) => ({
-            ...item,
-            rank: index + 1,
-          }));
-      }
+        return {
+          rank: item.rank,
+          teamNumber,
+          teamId: item.team_id,
+          teamName: item.team_name,
+          totalScore: Number(item.total_score) || 0,
+          usedPieces: Number(item.used_pieces) || 0,
+          totalPieces: Number(item.total_pieces) || 0,
+          completedLines: Number(item.completed_lines) || 0,
+        };
+      });
     }
 
     // 파티 참가자 수 및 팀 수 계산
