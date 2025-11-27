@@ -57,23 +57,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         block_type: string;
         created_at: string;
         submission_id: string | null;
+        source?: string;
+        value?: number;
       }>
     >(async () => {
       const result = await adminClient
         .from("team_block_events")
-        .select("id, block_type, created_at, submission_id")
+        .select("id, block_type, created_at, submission_id, source")
         .eq("party_id", partyId)
         .eq("team_id", teamId)
         .is("game_session_id", null) // 사용 가능한 블럭만 조회
         .order("created_at", { ascending: true });
 
-      // submission_id가 null인 블럭 필터링 (서버 사이드)
+      // submission_id가 null이 아닌 블럭 또는 특수 블럭(source === 'height_threshold') 포함
+      // 특수 블럭은 submission_id가 null이지만 게임 진행 중에 사용 가능해야 함
       if (result.data) {
-        const filtered = result.data.filter((block) => block.submission_id !== null);
+        const filtered = result.data.filter(
+          (block) => block.submission_id !== null || block.source === "height_threshold",
+        );
         console.log("🔍 필터링 결과:", {
           before: result.data.length,
           after: filtered.length,
-          filteredOut: result.data.filter((b) => b.submission_id === null),
+          filteredOut: result.data.filter(
+            (b) => b.submission_id === null && b.source !== "height_threshold",
+          ),
+          specialBlocks: result.data.filter((b) => b.source === "height_threshold"),
         });
         result.data = filtered;
       }
@@ -153,7 +161,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     const adminClient = createAdminClient();
 
     // team_block_events에 블럭 추가
-    const { data: insertedData, error: insertError } = await executeSupabaseQuery(async () => {
+    // 특수 블럭도 일반 블럭처럼 game_session_id는 null로 생성하고, 사용 시점에 소비 처리
+    const insertResult = await executeSupabaseQuery<{ id: string }>(async () => {
       return await adminClient
         .from("team_block_events")
         .insert({
@@ -163,11 +172,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           source: source as any, // 'height_threshold' 등
           block_type: blockType,
           value: 1,
-          game_session_id: null,
+          game_session_id: null, // 사용 시점에 소비 처리 (일반 블럭과 동일)
         })
         .select("id")
         .single();
     });
+
+    const insertedData = insertResult.data;
+    const insertError = insertResult.error;
 
     if (insertError || !insertedData) {
       console.error("블럭 추가 실패:", insertError);

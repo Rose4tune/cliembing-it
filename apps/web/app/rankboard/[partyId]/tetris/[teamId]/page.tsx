@@ -678,11 +678,12 @@ export default function TetrisPage() {
       const isSpecial = blockType === "special";
 
       // 시나리오 B: 블럭이 보드에 나타나기 전에 소비 처리
-      if (partyId && teamId) {
+      // 특수 블럭은 확정 버튼을 누를 때 소비 처리하므로 여기서는 소비하지 않음
+      if (partyId && teamId && !isSpecial) {
         // 임시 ID 블럭은 소비하지 않음 (DB에 존재하지 않음)
         if (nextPieceData.id.startsWith("temp-") || nextPieceData.id.startsWith("special-")) {
           console.warn("임시 ID 블럭은 소비하지 않습니다:", nextPieceData.id);
-          // 임시 ID 블럭은 그냥 사용 (특수 블럭의 경우 생성 시 DB에 추가해야 함)
+          // 임시 ID 블럭은 그냥 사용
         } else {
           try {
             // 블럭 소비 처리 (동기적으로 처리하여 중복 소비 방지)
@@ -789,6 +790,11 @@ export default function TetrisPage() {
         const newScore = calculateTetrisScore(newBoard);
         setTeamTotalScore(newScore);
 
+        // 4. 최고 높이 계산 (특수 블럭 보상 여부 판별)
+        const currentHeight = calculateHighestHeight(newBoard);
+        const previousHeight = previousHeightRef.current;
+        const shouldRewardSpecialBlock = checkSpecialBlockReward(currentHeight, previousHeight);
+
         // 4. 블럭 제거 및 게임 상태 저장 (시나리오 B: 이미 spawnNextPiece에서 소비 처리됨)
         if (currentBlockId) {
           // remainingPieces에서 제거 (블럭 소비는 이미 spawnNextPiece에서 완료)
@@ -817,7 +823,9 @@ export default function TetrisPage() {
             }
 
             // 남은 블럭이 0개이면 게임 세션을 pending으로 변경
-            if (updated.length === 0 && partyId && teamId) {
+            const shouldFinishGame =
+              updated.length === 0 && partyId && teamId && !shouldRewardSpecialBlock;
+            if (shouldFinishGame) {
               // 블럭이 모두 소진되었으므로 게임 세션을 pending으로 변경 (파티 진행 중이면)
               fetch(`/api/party/${partyId}/game-session`, {
                 method: "POST",
@@ -865,10 +873,8 @@ export default function TetrisPage() {
 
         // 5. 최고 높이 계산 및 특수 블럭 획득 체크
         // 자동 하강 중에는 특수 블럭을 생성하지 않음 (블럭이 고정될 때만 체크)
-        const currentHeight = calculateHighestHeight(newBoard);
-        const previousHeight = previousHeightRef.current;
         // 블럭이 고정된 후에만 특수 블럭 체크 (자동 하강 중이 아닐 때)
-        if (checkSpecialBlockReward(currentHeight, previousHeight)) {
+        if (shouldRewardSpecialBlock) {
           // previousHeight를 즉시 업데이트하여 중복 체크 방지
           previousHeightRef.current = currentHeight;
           // 특수 블럭 획득 (특수 라인 통과 시)
@@ -992,8 +998,8 @@ export default function TetrisPage() {
     }
   }, [currentPiece, gameState, isSpecialBlock, board, handlePieceLock]);
 
-  const handleConfirm = useCallback(() => {
-    if (!currentPiece || gameState !== "running" || !isSpecialBlock) return;
+  const handleConfirm = useCallback(async () => {
+    if (!currentPiece || gameState !== "running" || !isSpecialBlock || !currentBlockId) return;
 
     // 특수 블럭 확정 전 최종 위치 체크 (빈 칸이어야 함)
     if (!canPlacePiece(board, currentPiece, 0, 0, undefined, true)) {
@@ -1002,10 +1008,58 @@ export default function TetrisPage() {
       return;
     }
 
+    // 특수 블럭 소비 처리 (확정 버튼을 누를 때만 소비)
+    if (
+      partyId &&
+      teamId &&
+      !currentBlockId.startsWith("temp-") &&
+      !currentBlockId.startsWith("special-")
+    ) {
+      try {
+        const consumeResponse = await fetch(`/api/party/${partyId}/game-session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teamId,
+            action: "consume_block",
+            blockEventId: currentBlockId,
+          }),
+        });
+
+        const consumeResult = await consumeResponse.json().catch(() => null);
+
+        if (!consumeResponse.ok || !consumeResult?.success) {
+          // 소비 실패: 이미 사용된 블럭이거나 에러
+          const errorText = consumeResult?.error || "알 수 없는 오류";
+          console.error("⚠️ 특수 블럭 소비 실패:", {
+            blockEventId: currentBlockId,
+            status: consumeResponse.status,
+            error: errorText,
+          });
+          alert("블럭 사용 처리에 실패했습니다. 다시 시도해주세요.");
+          return;
+        }
+        // 소비 성공: 계속 진행
+      } catch (error) {
+        console.error("특수 블럭 소비 API 호출 실패:", error);
+        alert("블럭 사용 처리에 실패했습니다. 다시 시도해주세요.");
+        return;
+      }
+    }
+
     // 특수 블럭 확정 - 현재 위치에 고정
     handlePieceLock(currentPiece);
     setIsSpecialBlock(false);
-  }, [currentPiece, gameState, isSpecialBlock, board, handlePieceLock]);
+  }, [
+    currentPiece,
+    gameState,
+    isSpecialBlock,
+    board,
+    handlePieceLock,
+    currentBlockId,
+    partyId,
+    teamId,
+  ]);
 
   // 게임 점수 계산
   const calculateGameScore = useCallback((): number => {
