@@ -1,3 +1,7 @@
+## <small>0.1.4 (2025-11-27)</small>
+
+- fix: 파티 참가자 role 설정 변경(participant) ([31ad428](https://github.com/Rose4tune/cliembing-it/commit/31ad428))
+
 ## <small>0.1.3 (2025-11-27)</small>
 
 - fix: NextAuth 사용으로 발생하는 supabase auth.uid 에러 수정 ([6bbe4e1](https://github.com/Rose4tune/cliembing-it/commit/6bbe4e1))
