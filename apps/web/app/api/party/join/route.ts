@@ -39,17 +39,28 @@ export async function POST(request: Request) {
     }
 
     // 3. Supabase 클라이언트 생성
+    // 파티 코드로 조회할 때는 RLS 정책을 우회하기 위해 Service Role Key 사용
+    // (RLS 정책이 crew_members에 속한 사용자만 조회 가능하도록 되어 있어서,
+    //  파티 참가 전에는 해당 크루 멤버가 아닐 수 있음)
     const userRole = (session.user as { role?: string | null })?.role;
     let supabase;
+    let supabaseForQuery;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForQuery = supabase;
       } else {
+        // 파티 조회는 Service Role Key 사용 (RLS 우회)
+        supabaseForQuery = createAdminClient();
+        // 나머지 작업은 일반 클라이언트 사용
         supabase = await createServerClient();
       }
     } catch (error) {
       console.error("Supabase 클라이언트 생성 에러:", error);
       try {
+        // 파티 조회는 Service Role Key 사용
+        supabaseForQuery = createAdminClient();
         supabase = await createServerClient();
       } catch (fallbackError) {
         console.error("Supabase 클라이언트 생성 실패:", fallbackError);
@@ -57,15 +68,15 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!supabase) {
+    if (!supabase || !supabaseForQuery) {
       return errorResponse("데이터베이스 연결에 실패했습니다", 500);
     }
 
-    // 4. 파티 코드로 파티 조회
+    // 4. 파티 코드로 파티 조회 (Service Role Key 사용하여 RLS 우회)
     const trimmedCode = code.trim().toUpperCase();
     console.log("[API] 파티 조회 시도:", { code: trimmedCode, userId, userRole });
 
-    const { data: party, error: partyError } = await supabase
+    const { data: party, error: partyError } = await supabaseForQuery
       .from("parties")
       .select("id, name, status, start_at, end_at")
       .eq("code", trimmedCode)
@@ -100,7 +111,7 @@ export async function POST(request: Request) {
 
       // RLS 정책으로 인해 결과가 필터링되었을 가능성 확인
       // 모든 파티 코드로 테스트 쿼리 실행 (디버깅용)
-      const { data: allParties, error: testError } = await supabase
+      const { data: allParties, error: testError } = await supabaseForQuery
         .from("parties")
         .select("code")
         .limit(5);
@@ -113,8 +124,8 @@ export async function POST(request: Request) {
       return errorResponse("유효하지 않은 파티 코드입니다", 404);
     }
 
-    // 5. 이미 참가한 파티인지 확인
-    const { data: existingMember, error: existingMemberError } = await supabase
+    // 5. 이미 참가한 파티인지 확인 (Service Role Key 사용하여 RLS 우회)
+    const { data: existingMember, error: existingMemberError } = await supabaseForQuery
       .from("party_members")
       .select("id")
       .eq("party_id", party.id)
@@ -130,8 +141,8 @@ export async function POST(request: Request) {
       return errorResponse("이미 참가한 파티입니다", 400);
     }
 
-    // 6. 사용자의 base_level 조회
-    const { data: user, error: userError } = await supabase
+    // 6. 사용자의 base_level 조회 (Service Role Key 사용하여 RLS 우회)
+    const { data: user, error: userError } = await supabaseForQuery
       .from("users")
       .select("base_level")
       .eq("id", userId)

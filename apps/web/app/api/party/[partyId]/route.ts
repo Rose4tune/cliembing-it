@@ -20,22 +20,40 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return errorResponse("파티 ID가 필요합니다", 400);
     }
 
-    // 2. Supabase 클라이언트 생성 (관리자 권한이 있으면 관리자 클라이언트 사용)
+    // 2. Supabase 클라이언트 생성
+    // NextAuth 사용 시 auth.uid()가 null이므로 RLS 정책을 우회하기 위해
+    // parties 조회 시 Service Role Key 사용
     const userRole = (session.user as { role?: string | null })?.role;
     let supabase;
+    let supabaseForQuery;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForQuery = supabase;
       } else {
+        // parties 조회는 Service Role Key 사용 (RLS 우회)
+        supabaseForQuery = createAdminClient();
         supabase = await createServerClient();
       }
     } catch (error) {
-      supabase = await createServerClient();
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabaseForQuery = createAdminClient();
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
     }
 
-    // 3. 파티 정보 조회
+    if (!supabase || !supabaseForQuery) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+    }
+
+    // 3. 파티 정보 조회 (Service Role Key 사용)
     const result = await executeSupabaseQuery(async () => {
-      return await supabase.from("parties").select("*").eq("id", partyId).single();
+      return await supabaseForQuery.from("parties").select("*").eq("id", partyId).single();
     });
 
     if (!result.success || !result.data) {

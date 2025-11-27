@@ -21,20 +21,38 @@ export async function GET() {
     }
 
     // 2. Supabase 클라이언트 생성
+    // NextAuth 사용 시 auth.uid()가 null이므로 RLS 정책을 우회하기 위해
+    // party_members, parties 조회 시 Service Role Key 사용
     const userRole = (session.user as { role?: string | null })?.role;
     let supabase;
+    let supabaseForQuery;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForQuery = supabase;
       } else {
+        // party_members, parties 조회는 Service Role Key 사용 (RLS 우회)
+        supabaseForQuery = createAdminClient();
         supabase = await createServerClient();
       }
     } catch (error) {
-      supabase = await createServerClient();
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabaseForQuery = createAdminClient();
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
+    }
+
+    if (!supabase || !supabaseForQuery) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
     }
 
     // 3. 참여한 파티 목록 조회 (party_members와 parties 조인)
-    const { data: members, error: membersError } = await supabase
+    const { data: members, error: membersError } = await supabaseForQuery
       .from("party_members")
       .select("party_id, team_id")
       .eq("user_id", userId);
@@ -60,9 +78,9 @@ export async function GET() {
       });
     }
 
-    // 4. 파티 정보 조회
+    // 4. 파티 정보 조회 (Service Role Key 사용)
     const partiesResult = await executeSupabaseQuery(async () => {
-      return await supabase
+      return await supabaseForQuery
         .from("parties")
         .select("*")
         .in("id", partyIds)
@@ -103,7 +121,7 @@ export async function GET() {
     const partiesWithCount = await Promise.all(
       partiesResult.data.map(async (party: any) => {
         try {
-          const { count, error: countError } = await supabase
+          const { count, error: countError } = await supabaseForQuery
             .from("party_members")
             .select("*", { count: "exact", head: true })
             .eq("party_id", party.id);

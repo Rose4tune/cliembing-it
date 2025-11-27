@@ -28,21 +28,39 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     console.log("권한 확인 요청:", { userId, partyId });
 
     // 2. Supabase 클라이언트 생성
+    // NextAuth 사용 시 auth.uid()가 null이므로 RLS 정책을 우회하기 위해
+    // party_members, parties 조회 시 Service Role Key 사용
     const userRole = (session.user as { role?: string | null })?.role;
     console.log("사용자 역할:", userRole);
     let supabase;
+    let supabaseForQuery;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForQuery = supabase;
       } else {
+        // party_members, parties 조회는 Service Role Key 사용 (RLS 우회)
+        supabaseForQuery = createAdminClient();
         supabase = await createServerClient();
       }
-    } catch {
-      supabase = await createServerClient();
+    } catch (error) {
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabaseForQuery = createAdminClient();
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
+    }
+
+    if (!supabase || !supabaseForQuery) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
     }
 
     // 3. 파티 멤버 정보 조회 (데이터가 없을 수 있으므로 single() 대신 maybeSingle() 사용)
-    const { data: partyMember, error: memberError } = await supabase
+    const { data: partyMember, error: memberError } = await supabaseForQuery
       .from("party_members")
       .select("role")
       .eq("party_id", partyId)
@@ -54,12 +72,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       console.error("파티 멤버 조회 에러:", memberError);
     }
 
-    // 4. 파티 정보 조회 (created_by 확인)
-    const { data: party, error: partyError } = await supabase
+    // 4. 파티 정보 조회 (created_by 확인) (Service Role Key 사용)
+    const { data: party, error: partyError } = await supabaseForQuery
       .from("parties")
       .select("created_by, status")
       .eq("id", partyId)
-      .single();
+      .maybeSingle();
 
     if (partyError || !party) {
       return errorResponse("파티를 찾을 수 없습니다", 404);

@@ -22,29 +22,47 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const { partyId } = await params;
 
     // Supabase 클라이언트 생성
+    // NextAuth 사용 시 auth.uid()가 null이므로 RLS 정책을 우회하기 위해
+    // party_members 조회 시 Service Role Key 사용
     const userRole = (session.user as { role?: string | null })?.role;
     let supabase;
+    let supabaseForQuery;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForQuery = supabase;
       } else {
+        // party_members 조회는 Service Role Key 사용 (RLS 우회)
+        supabaseForQuery = createAdminClient();
         supabase = await createServerClient();
       }
     } catch (error) {
-      supabase = await createServerClient();
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabaseForQuery = createAdminClient();
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
     }
 
-    // 파티 멤버 정보 조회
+    if (!supabase || !supabaseForQuery) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+    }
+
+    // 파티 멤버 정보 조회 (Service Role Key 사용)
     const result = await executeSupabaseQuery<{
       level: string | null;
       team_id: string | null;
     }>(async () => {
-      return await supabase
+      return await supabaseForQuery
         .from("party_members")
         .select("level, team_id")
         .eq("party_id", partyId)
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
     });
 
     if (!result.success || !result.data) {

@@ -23,25 +23,43 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const { partyId } = await params;
 
     // Supabase 클라이언트 생성
+    // NextAuth 사용 시 auth.uid()가 null이므로 RLS 정책을 우회하기 위해
+    // party_members 조회 시 Service Role Key 사용
     const userRole = (session.user as { role?: string | null })?.role;
     let supabase;
+    let supabaseForQuery;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForQuery = supabase;
       } else {
+        // party_members 조회는 Service Role Key 사용 (RLS 우회)
+        supabaseForQuery = createAdminClient();
         supabase = await createServerClient();
       }
-    } catch {
-      supabase = await createServerClient();
+    } catch (error) {
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabaseForQuery = createAdminClient();
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
     }
 
-    // 파티 멤버 확인
-    const { data: member } = await supabase
+    if (!supabase || !supabaseForQuery) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+    }
+
+    // 파티 멤버 확인 (Service Role Key 사용)
+    const { data: member } = await supabaseForQuery
       .from("party_members")
       .select("id")
       .eq("party_id", partyId)
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (!member) {
       return errorResponse("파티에 참가하지 않았습니다", 403);
@@ -100,25 +118,43 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     }
 
     // Supabase 클라이언트 생성
+    // NextAuth 사용 시 auth.uid()가 null이므로 RLS 정책을 우회하기 위해
+    // party_members 조회 시 Service Role Key 사용
     const userRole = (session.user as { role?: string | null })?.role;
     let supabase;
+    let supabaseForQuery;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForQuery = supabase;
       } else {
+        // party_members 조회는 Service Role Key 사용 (RLS 우회)
+        supabaseForQuery = createAdminClient();
         supabase = await createServerClient();
       }
-    } catch {
-      supabase = await createServerClient();
+    } catch (error) {
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabaseForQuery = createAdminClient();
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
     }
 
-    // 파티 멤버 확인 및 기준 레벨 가져오기
-    const { data: member, error: memberError } = await supabase
+    if (!supabase || !supabaseForQuery) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+    }
+
+    // 파티 멤버 확인 및 기준 레벨 가져오기 (Service Role Key 사용)
+    const { data: member, error: memberError } = await supabaseForQuery
       .from("party_members")
       .select("id, level")
       .eq("party_id", partyId)
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (memberError || !member) {
       return errorResponse("파티에 참가하지 않았습니다", 403);

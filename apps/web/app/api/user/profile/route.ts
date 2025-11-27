@@ -23,17 +23,27 @@ export async function GET() {
     }
 
     // Supabase 클라이언트 생성
+    // NextAuth 사용 시 auth.uid()가 null이므로 RLS 정책을 우회하기 위해
+    // 자신의 정보를 조회할 때는 Service Role Key 사용
     const userRole = (session.user as { role?: string | null })?.role;
     let supabase;
+    let supabaseForQuery;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForQuery = supabase;
       } else {
+        // 사용자 정보 조회는 Service Role Key 사용 (RLS 우회)
+        supabaseForQuery = createAdminClient();
+        // 나머지 작업은 일반 클라이언트 사용
         supabase = await createServerClient();
       }
     } catch (error) {
       console.error("Supabase 클라이언트 생성 에러:", error);
       try {
+        // 사용자 정보 조회는 Service Role Key 사용
+        supabaseForQuery = createAdminClient();
         supabase = await createServerClient();
       } catch (fallbackError) {
         console.error("Supabase 클라이언트 생성 실패:", fallbackError);
@@ -41,11 +51,11 @@ export async function GET() {
       }
     }
 
-    if (!supabase) {
+    if (!supabase || !supabaseForQuery) {
       return errorResponse("데이터베이스 연결에 실패했습니다", 500);
     }
 
-    // 사용자 정보 조회
+    // 사용자 정보 조회 (Service Role Key 사용하여 RLS 우회)
     const result = await executeSupabaseQuery<{
       id: string;
       nickname: string | null;
@@ -54,7 +64,7 @@ export async function GET() {
       mbti: string | null;
       created_at: string;
     }>(async () => {
-      return await supabase
+      return await supabaseForQuery
         .from("users")
         .select("id, nickname, email, base_level, mbti, created_at")
         .eq("id", userId)
@@ -152,17 +162,27 @@ export async function PATCH(request: Request) {
     const { nickname, email, level } = body;
 
     // Supabase 클라이언트 생성
+    // NextAuth 사용 시 auth.uid()가 null이므로 RLS 정책을 우회하기 위해
+    // 자신의 정보를 수정할 때는 Service Role Key 사용
     const userRole = (session.user as { role?: string | null })?.role;
     let supabase;
+    let supabaseForUpdate;
+
     try {
       if (userRole === "admin") {
         supabase = createAdminClient();
+        supabaseForUpdate = supabase;
       } else {
+        // 사용자 정보 수정은 Service Role Key 사용 (RLS 우회)
+        supabaseForUpdate = createAdminClient();
+        // 나머지 작업은 일반 클라이언트 사용
         supabase = await createServerClient();
       }
     } catch (error) {
       console.error("Supabase 클라이언트 생성 에러:", error);
       try {
+        // 사용자 정보 수정은 Service Role Key 사용
+        supabaseForUpdate = createAdminClient();
         supabase = await createServerClient();
       } catch (fallbackError) {
         console.error("Supabase 클라이언트 생성 실패:", fallbackError);
@@ -170,7 +190,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (!supabase) {
+    if (!supabase || !supabaseForUpdate) {
       return errorResponse("데이터베이스 연결에 실패했습니다", 500);
     }
 
@@ -211,7 +231,12 @@ export async function PATCH(request: Request) {
       mbti: string | null;
       created_at: string;
     }>(async () => {
-      return await supabase.from("users").update(updateData).eq("id", userId).select().single();
+      return await supabaseForUpdate
+        .from("users")
+        .update(updateData)
+        .eq("id", userId)
+        .select()
+        .single();
     });
 
     if (!result.success || !result.data) {
