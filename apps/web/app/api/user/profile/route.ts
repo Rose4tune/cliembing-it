@@ -30,7 +30,17 @@ export async function GET() {
         supabase = await createServerClient();
       }
     } catch (error) {
-      supabase = await createServerClient();
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
+    }
+
+    if (!supabase) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
     }
 
     // 사용자 정보 조회
@@ -46,10 +56,16 @@ export async function GET() {
         .from("users")
         .select("id, nickname, email, base_level, mbti, created_at")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
     });
 
-    if (!result.success || !result.data) {
+    if (!result.success) {
+      console.error("사용자 조회 에러:", result.error);
+      return errorResponse("사용자 정보를 조회할 수 없습니다", 500);
+    }
+
+    if (!result.data) {
+      console.warn("사용자를 찾을 수 없음:", { userId });
       return errorResponse("사용자 정보를 찾을 수 없습니다", 404);
     }
 
@@ -97,7 +113,11 @@ export async function GET() {
         })) || [],
     });
   } catch (error) {
-    console.error("프로필 조회 에러:", error);
+    console.error("프로필 조회 에러:", {
+      error,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return errorResponse(error instanceof Error ? error.message : "서버 오류가 발생했습니다", 500);
   }
 }
@@ -119,7 +139,14 @@ export async function PATCH(request: Request) {
     }
 
     // 요청 데이터 파싱
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error("요청 본문 파싱 에러:", parseError);
+      return errorResponse("잘못된 요청 형식입니다", 400);
+    }
+
     const { nickname, email, level } = body;
 
     // Supabase 클라이언트 생성
@@ -132,7 +159,17 @@ export async function PATCH(request: Request) {
         supabase = await createServerClient();
       }
     } catch (error) {
-      supabase = await createServerClient();
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
+    }
+
+    if (!supabase) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
     }
 
     // 업데이트할 데이터 준비
@@ -195,7 +232,11 @@ export async function PATCH(request: Request) {
       message: "프로필이 수정되었습니다",
     });
   } catch (error) {
-    console.error("프로필 수정 에러:", error);
+    console.error("프로필 수정 에러:", {
+      error,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return errorResponse(error instanceof Error ? error.message : "서버 오류가 발생했습니다", 500);
   }
 }
