@@ -1,3 +1,10 @@
+## <small>0.1.3 (2025-11-27)</small>
+
+- fix: NextAuth 사용으로 발생하는 supabase auth.uid 에러 수정 ([6bbe4e1](https://github.com/Rose4tune/cliembing-it/commit/6bbe4e1))
+- test: api 테스트 콘솔 추가 ([d07fc2c](https://github.com/Rose4tune/cliembing-it/commit/d07fc2c))
+- chore: --webpack 플래그를 제거 ([8e66c42](https://github.com/Rose4tune/cliembing-it/commit/8e66c42))
+- hotfix: vercel 배포 설정 수정 ([873e2b4](https://github.com/Rose4tune/cliembing-it/commit/873e2b4))
+
 ## <small>0.1.2 (2025-11-27)</small>
 
 - fix: 파티 참가 오류 수정 ([176b3b8](https://github.com/Rose4tune/cliembing-it/commit/176b3b8))
