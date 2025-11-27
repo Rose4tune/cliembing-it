@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { Header } from "../../components/Header";
 import { RankboardFooterNavigation } from "../../components/RankboardFooterNavigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
-import { Trophy, Clock } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
 import { PARTY_STATUS_LABELS, PARTY_STATUS_COLORS, type PartyStatus } from "@pkg/shared";
 import type { Party } from "@pkg/shared";
+import { createClient } from "@pkg/supabase/client";
+import { TeamRanking } from "../../components/Tetris/TeamRanking";
+import { useCountdownTimer } from "../../hooks/useCountdownTimer";
 
 type TabType = "group" | "team" | "challenge";
 type SubTabType = "crux" | "grip";
@@ -25,33 +28,173 @@ export default function RankboardPage() {
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userGroup, setUserGroup] = useState<SubTabType | null>(null);
+  const [rankingData, setRankingData] = useState<{
+    party: {
+      id: string;
+      name: string;
+      status: string;
+      participants: number;
+      teams: number;
+    };
+    partyStartAt?: string | null;
+    partyEndAt?: string | null;
+    crux?: Array<{
+      rank: number;
+      userId: string;
+      nickname: string;
+      teamId: string | null;
+      teamName: string | null;
+      totalScore: number;
+    }>;
+    grip?: Array<{
+      rank: number;
+      userId: string;
+      nickname: string;
+      teamId: string | null;
+      teamName: string | null;
+      totalScore: number;
+    }>;
+    team: Array<{
+      rank: number;
+      teamId?: string;
+      teamName?: string;
+      totalScore: number;
+      usedPieces: number;
+      totalPieces: number;
+      completedLines: number;
+      members?: Array<{ name: string; level: string }>;
+    }>;
+    challenge: Array<{
+      rank?: number;
+      teamId?: string;
+      teamName?: string;
+      attempts?: number;
+      failures?: number;
+      bestTime?: string | null;
+      status?: "success" | "all_failed";
+    }>;
+  } | null>(null);
+  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
 
-  // 파티 정보 조회
+  // 랭킹 데이터 조회 함수 (Realtime에서도 사용)
+  const fetchRankingData = useCallback(async () => {
+    if (!partyId) return;
+
+    try {
+      setLoading(true);
+
+      // 사용자 그룹 조회
+      const memberResponse = await fetch(`/api/party/${partyId}/member`);
+      if (memberResponse.ok) {
+        const memberResult = await memberResponse.json();
+        if (memberResult.success && memberResult.data) {
+          const level = memberResult.data.level;
+          // Crux 그룹: White, Hite
+          // Grip 그룹: Blue, Navy, Purple
+          if (level === "White" || level === "Hite") {
+            setUserGroup("crux");
+            setActiveSubTab("crux");
+          } else if (["Blue", "Navy", "Purple"].includes(level)) {
+            setUserGroup("grip");
+            setActiveSubTab("grip");
+          }
+          setCurrentTeamId(memberResult.data.team_id || null);
+        }
+      }
+
+      // 랭킹 데이터 조회
+      const response = await fetch(`/api/party/${partyId}/rankings`);
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setRankingData(result.data);
+        // 파티 정보도 랭킹 API에서 가져온 데이터로 설정
+        if (result.data.party) {
+          setParty({
+            id: result.data.party.id,
+            name: result.data.party.name,
+            status: result.data.party.status as PartyStatus,
+            total_participants: result.data.party.participants,
+            total_teams: result.data.party.teams,
+            start_at: result.data.partyStartAt || null,
+            end_at: result.data.partyEndAt || null,
+          } as Party);
+        }
+      } else {
+        setError(result.error || "랭킹 정보를 불러올 수 없습니다");
+      }
+    } catch (error) {
+      console.error("랭킹 조회 에러:", error);
+      setError("랭킹 정보를 불러올 수 없습니다");
+    } finally {
+      setLoading(false);
+    }
+  }, [partyId]);
+
+  // 사용자 그룹 조회 및 랭킹 데이터 조회
   useEffect(() => {
     if (!partyId) return;
 
-    const fetchParty = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/party/${partyId}`);
-        const result = await response.json();
+    // 초기 데이터 로드
+    fetchRankingData();
 
-        if (response.ok && result.success) {
-          // API 응답 형식: successResponse(result.data)이므로 result.data가 파티 정보
-          setParty(result.data);
-        } else {
-          setError(result.error || "파티를 찾을 수 없습니다");
-        }
-      } catch (error) {
-        console.error("파티 조회 에러:", error);
-        setError("파티 정보를 불러올 수 없습니다");
-      } finally {
-        setLoading(false);
-      }
+    // Supabase Realtime 구독
+    const supabase = createClient();
+    if (!supabase) {
+      console.error("Supabase 클라이언트 생성 실패");
+      return;
+    }
+
+    // 1. level_scores 테이블 변경 감지 (INSERT, UPDATE, DELETE)
+    const scoresChannel = supabase
+      .channel(`level_scores_changes_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE 모두 감지
+          schema: "public",
+          table: "level_scores",
+          filter: `party_id=eq.${partyId}`, // 해당 파티의 변경만 감지
+        },
+        (payload) => {
+          console.log("📡 level_scores 변경 감지:", payload);
+          // 랭킹 데이터 다시 조회 (로딩 상태 없이)
+          setLoading(false); // 로딩 상태는 유지하지 않음
+          fetchRankingData();
+        },
+      )
+      .subscribe();
+
+    // 2. 파티 상태 변경 감지
+    const partyChannel = supabase
+      .channel(`party_status_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "parties",
+          filter: `id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("📡 파티 상태 변경 감지:", payload);
+          const updatedParty = payload.new as Party;
+          if (updatedParty) {
+            setParty(updatedParty);
+            // 랭킹 데이터도 다시 조회하여 파티 정보 업데이트
+            fetchRankingData();
+          }
+        },
+      )
+      .subscribe();
+
+    // cleanup: 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      supabase.removeChannel(scoresChannel);
+      supabase.removeChannel(partyChannel);
     };
-
-    fetchParty();
-  }, [partyId]);
+  }, [partyId, fetchRankingData]);
 
   // 일반 사용자의 접근 제한 체크 (진행중이 아니거나 1시간 전이 아닌 경우)
   useEffect(() => {
@@ -100,38 +243,14 @@ export default function RankboardPage() {
     checkAccess();
   }, [party, partyId, router]);
 
-  // Mock data (실제 데이터로 교체 필요)
-  const cruxRankings = [
-    { rank: 1, name: "김클라임", teamNumber: 2, level: "White", score: 28 },
-    { rank: 2, name: "이클라임", teamNumber: 1, level: "Hite", score: 26 },
-    { rank: 3, name: "박클라임", teamNumber: 3, level: "White", score: 25 },
-    { rank: 4, name: "최클라임", teamNumber: 2, level: "Hite", score: 24 },
-    { rank: 5, name: "정클라임", teamNumber: 1, level: "White", score: 23 },
-    { rank: 6, name: "강클라임", teamNumber: 4, level: "Hite", score: 22 },
-  ];
-
-  const gripRankings = [
-    { rank: 1, name: "홍클라임", teamNumber: 1, level: "Purple", score: 28 },
-    { rank: 2, name: "윤클라임", teamNumber: 1, level: "Navy", score: 26 },
-    { rank: 3, name: "조클라임", teamNumber: 2, level: "Purple", score: 25 },
-    { rank: 4, name: "신클라임", teamNumber: 1, level: "Blue", score: 24 },
-    { rank: 5, name: "오클라임", teamNumber: 2, level: "Navy", score: 23 },
-    { rank: 6, name: "서클라임", teamNumber: 3, level: "Purple", score: 22 },
-  ];
-
-  const teamRankings = [
-    { rank: 1, team: "3조", blocks: 4, score: 1247, icon: Trophy },
-    { rank: 2, team: "2조", blocks: 4, score: 1247, icon: Clock },
-    { rank: 3, team: "7조", blocks: 4, score: 1247, icon: Clock },
-    { rank: 4, team: "1조", blocks: 4, score: 1247, icon: null },
-  ];
-
-  const challengeStatus = [
-    { rank: 1, team: "3조", attempts: 1, failures: 1, time: "3분 28초", icon: Trophy },
-    { rank: 2, team: "2조", attempts: 1, failures: 1, time: "3분 28초", icon: Clock },
-    { rank: 3, team: "7조", attempts: 1, failures: 1, time: "3분 28초", icon: Clock },
-    { rank: 4, team: "1조", attempts: 1, failures: 1, time: "3분 28초", icon: null },
-  ];
+  // Hooks must be called before any conditional returns
+  const sessionUserId = (session?.user as { id?: string | null })?.id || null;
+  const { time: countdownTime, progress: countdownProgress } = useCountdownTimer(
+    rankingData?.partyEndAt ?? party?.end_at ?? null,
+    {
+      startTime: rankingData?.partyStartAt ?? party?.start_at ?? null,
+    },
+  );
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
@@ -166,18 +285,36 @@ export default function RankboardPage() {
     );
   }
 
-  const statusColor =
-    PARTY_STATUS_COLORS[party.status as PartyStatus] || "bg-gray-100 text-gray-800";
-  const statusLabel = PARTY_STATUS_LABELS[party.status as PartyStatus] || party.status;
+  if (!rankingData) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header variant="dashboard" partyName="로딩 중..." />
+        <main className="flex-1 container max-w-lg mx-auto px-4 py-6">
+          <div className="text-center text-muted-foreground">로딩 중...</div>
+        </main>
+      </div>
+    );
+  }
 
-  // 진행 시간 계산 (임시)
-  const timeRemaining = party.end_at
-    ? Math.max(0, Math.floor((new Date(party.end_at).getTime() - Date.now()) / 1000))
-    : 0;
-  const hours = Math.floor(timeRemaining / 3600);
-  const minutes = Math.floor((timeRemaining % 3600) / 60);
-  const seconds = timeRemaining % 60;
-  const timeRemainingStr = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  const statusColor =
+    PARTY_STATUS_COLORS[party?.status as PartyStatus] || "bg-gray-100 text-gray-800";
+  const statusLabel = PARTY_STATUS_LABELS[party?.status as PartyStatus] || party?.status;
+
+  // 랭킹 데이터
+  const cruxRankings = rankingData.crux || [];
+  const gripRankings = rankingData.grip || [];
+  const currentGroupRankings = activeSubTab === "crux" ? cruxRankings : gripRankings;
+  const teamRankings = (rankingData.team || []).map((team) => {
+    // teamName에서 숫자 추출 (예: "1조" -> 1)
+    const teamNumberMatch = team.teamName?.match(/(\d+)/);
+    const teamNumber = teamNumberMatch?.[1] ? parseInt(teamNumberMatch[1], 10) : 0;
+    return {
+      ...team,
+      teamNumber,
+    };
+  });
+  const challengeRankings = rankingData.challenge || [];
+  const partyInfo = rankingData.party;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -213,24 +350,24 @@ export default function RankboardPage() {
             <div className="flex gap-6 text-sm">
               <div>
                 <span className="text-muted-foreground">참가자</span>
-                <p className="font-semibold">{party.total_participants || 0}명</p>
+                <p className="font-semibold">{partyInfo.participants}명</p>
               </div>
               <div>
                 <span className="text-muted-foreground">팀</span>
-                <p className="font-semibold">{party.total_teams || 0}개</p>
+                <p className="font-semibold">{partyInfo.teams}개</p>
               </div>
             </div>
-            {party.end_at && (
+            {rankingData.partyEndAt && (
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-muted-foreground">남은 시간</span>
-                  <span className="font-semibold">{timeRemainingStr}</span>
+                  <span className="font-semibold">{countdownTime}</span>
                 </div>
                 <div className="w-full bg-secondary rounded-full h-2">
                   <div
                     className="bg-primary h-2 rounded-full transition-all"
                     style={{
-                      width: `${Math.min(100, Math.max(0, (timeRemaining / 3600) * 100))}%`,
+                      width: `${countdownProgress}%`,
                     }}
                   />
                 </div>
@@ -281,113 +418,135 @@ export default function RankboardPage() {
           {activeTab === "group" && (
             <>
               {/* Sub Navigation for Group Ranking */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveSubTab("crux")}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-sm font-medium transition-colors",
-                    activeSubTab === "crux"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                  )}
-                >
-                  Crux
-                </button>
-                <button
-                  onClick={() => setActiveSubTab("grip")}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-sm font-medium transition-colors",
-                    activeSubTab === "grip"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                  )}
-                >
-                  Grip
-                </button>
+              <div className="flex justify-between items-center">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveSubTab("crux")}
+                    className={cn(
+                      "min-w-18 px-4 py-1 rounded-full text-sm font-medium transition-colors",
+                      activeSubTab === "crux"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                    )}
+                  >
+                    Crux
+                  </button>
+                  <button
+                    onClick={() => setActiveSubTab("grip")}
+                    className={cn(
+                      "min-w-18 px-4 py-1 rounded-full text-sm font-medium transition-colors",
+                      activeSubTab === "grip"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                    )}
+                  >
+                    Grip
+                  </button>
+                </div>
+                <p className="text-gray-400 text-left">Hunted Point</p>
               </div>
 
               <div className="space-y-4">
-                <p className="text-gray-400 text-right">Hunted Point</p>
                 <div className="space-y-2">
-                  {(activeSubTab === "crux" ? cruxRankings : gripRankings).map((item) => (
-                    <Card key={item.rank} className="p-4">
-                      <CardContent>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3 flex-1">
-                            <div className="w-6 flex justify-center">{getRankIcon(item.rank)}</div>
-                            <div className="flex-1">
-                              <p className="font-semibold">{item.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {item.teamNumber}조 {item.level}
-                              </p>
+                  {currentGroupRankings.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-8">
+                      {activeSubTab === "crux" ? "Crux" : "Grip"} 그룹 랭킹 데이터가 없습니다.
+                    </div>
+                  ) : (
+                    currentGroupRankings.map((item) => (
+                      <Card
+                        key={item.userId}
+                        className={cn(
+                          "p-4 border transition-all",
+                          sessionUserId === item.userId ? "border-primary" : "",
+                        )}
+                      >
+                        <CardContent>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1">
+                              <div className="w-6 flex justify-center">
+                                {getRankIcon(item.rank)}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-semibold">{item.nickname}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {item.teamName || "팀 없음"}
+                                </p>
+                              </div>
                             </div>
+                            <span className="text-sm font-semibold">{item.totalScore} 점</span>
                           </div>
-                          <span className="text-sm font-semibold">{item.score} 점</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               </div>
             </>
           )}
 
           {activeTab === "team" && (
-            <div className="space-y-4">
-              <p className="text-gray-400 text-right">Total score</p>
-              <div className="space-y-2">
-                {teamRankings.map((item) => (
-                  <Card key={item.rank} className="p-4">
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="w-6 flex justify-center">{getRankIcon(item.rank)}</div>
-                          <div className="flex-1">
-                            <p className="font-semibold">{item.team}</p>
-                            <p className="text-xs text-muted-foreground">
-                              현재 모인 블럭 갯수: {item.blocks}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-sm font-semibold">{item.score} 점</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
+            <>
+              {teamRankings.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  팀 랭킹 데이터가 없습니다.
+                </div>
+              ) : (
+                <TeamRanking teams={teamRankings} highlightTeamId={currentTeamId} />
+              )}
+            </>
           )}
 
           {activeTab === "challenge" && (
-            <div className="space-y-4">
-              <p className="text-gray-400 text-right">Taken Time</p>
-              <div className="space-y-2">
-                {challengeStatus.map((item) => (
-                  <Card key={item.rank} className="p-4">
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="w-6 flex justify-center">{getRankIcon(item.rank)}</div>
-                          <div className="flex-1">
-                            <p className="font-semibold">{item.team}</p>
-                            <div className="text-xs text-muted-foreground space-y-0.5">
-                              <p>도전 가능 횟수: {item.attempts}</p>
-                              <p>실패 횟수: {item.failures}</p>
+            <>
+              <p className="text-gray-400 text-right">Time Taken</p>
+              {rankingData.challenge.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  챌린지 기록이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {rankingData.challenge.map((item) => {
+                    const isFailed = item.status === "all_failed";
+                    const displayTime = isFailed ? "-분 -초" : item.bestTime || "--:--";
+
+                    return (
+                      <div
+                        key={item.teamId}
+                        className={cn(
+                          "flex items-center justify-between p-3 border rounded-lg",
+                          currentTeamId && item.teamId === currentTeamId
+                            ? "border-primary border-2"
+                            : "",
+                        )}
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-6 flex justify-center flex-shrink-0">
+                            {getRankIcon(item.rank || 0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate">
+                              {item.teamName || "팀 정보 없음"}
+                            </p>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {item.attempts !== undefined && <span>도전: {item.attempts}/2</span>}
                             </div>
                           </div>
                         </div>
-                        <span className="text-sm font-semibold">{item.time}</span>
+                        <div className="text-sm font-semibold flex-shrink-0 ml-2">
+                          {displayTime}
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
 
-      <RankboardFooterNavigation />
+      <RankboardFooterNavigation partyId={partyId} />
     </div>
   );
 }

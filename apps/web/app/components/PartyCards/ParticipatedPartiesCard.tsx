@@ -15,6 +15,8 @@ import { useViewMode } from "../../contexts/ViewModeContext";
 
 interface ParticipatedParty extends Party {
   participant_count: number;
+  user_team_id?: string | null;
+  user_team_name?: string | null;
 }
 
 export function ParticipatedPartiesCard() {
@@ -153,7 +155,7 @@ export function ParticipatedPartiesCard() {
                 <div
                   key={party.id}
                   onClick={() => handlePartyClick(party)}
-                  className="relative bg-background rounded-lg border border-border cursor-pointer opacity-80 hover:opacity-100 hover:bg-foreground/10 transition-opacity overflow-hidden"
+                  className="relative bg-background rounded-lg border border-border cursor-pointer opacity-80 hover:opacity-100 hover:bg-foreground/5 transition-opacity overflow-hidden"
                 >
                   {/* 상단: vol.4 테트리스 / check my block! */}
                   <div className="flex items-center justify-between px-4 pt-4 pb-3">
@@ -169,19 +171,23 @@ export function ParticipatedPartiesCard() {
                   </div>
 
                   {/* 중간: 팀 정보 박스 */}
-                  <div className="mx-4 mb-4 p-3 bg-secondary/50 rounded-lg border border-border/50">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">3조</span>
-                      <span className="px-2 py-0.5 bg-muted rounded-full text-xs text-foreground">
-                        {userName}
-                      </span>
+                  {party.user_team_name && (
+                    <div className="mx-4 mb-4 p-3 bg-secondary/50 rounded-lg border border-border/50">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">
+                          {party.user_team_name}
+                        </span>
+                        <span className="px-2 py-0.5 bg-muted rounded-full text-xs text-foreground">
+                          {userName}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* 하단: 버튼 */}
                   <div className="px-4 pb-4">
                     <Button
-                      className="w-full rounded-full bg-gradient-to-r from-primary to-primary/80 text-white font-semibold py-3"
+                      className="w-full rounded-full bg-linear-to-r from-primary to-primary/80 text-white text-lg py-3"
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePartyClick(party);
@@ -199,7 +205,7 @@ export function ParticipatedPartiesCard() {
               <div
                 key={party.id}
                 onClick={() => handlePartyClick(party)}
-                className="p-4 bg-background rounded-lg border border-gray-200/60 cursor-pointer hover:bg-foreground/10 transition-colors"
+                className="p-4 bg-background rounded-lg border border-gray-200/60 cursor-pointer hover:bg-foreground/5 transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">

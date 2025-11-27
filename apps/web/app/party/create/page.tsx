@@ -15,6 +15,8 @@ interface PartyFormData {
   description: string;
   date: string;
   time: string;
+  endDate: string;
+  endTime: string;
   location: string;
   maxParticipants: number;
 }
@@ -30,9 +32,12 @@ function CreatePartyForm() {
     description: "",
     date: "",
     time: "",
+    endDate: "",
+    endTime: "",
     location: "",
     maxParticipants: 20,
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // URL 쿼리 파라미터에서 제목 가져오기
   useEffect(() => {
@@ -69,19 +74,45 @@ function CreatePartyForm() {
   };
 
   const isFormValid = () => {
-    return (
+    const isValid =
       formData.title.trim() !== "" &&
       formData.date !== "" &&
       formData.time !== "" &&
+      formData.endDate !== "" &&
+      formData.endTime !== "" &&
       formData.location.trim() !== "" &&
-      formData.maxParticipants > 0
-    );
+      formData.maxParticipants > 0;
+
+    // 종료 시간이 시작 시간보다 나중이어야 함
+    if (isValid) {
+      const startDateTime = new Date(`${formData.date}T${formData.time}`);
+      const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
+      if (endDateTime <= startDateTime) {
+        return false;
+      }
+    }
+
+    return isValid;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // 중복 요청 방지
+    if (isSubmitting) {
+      return;
+    }
+
     if (!isFormValid()) {
+      // 종료 시간이 시작 시간보다 나중인지 확인
+      if (formData.date && formData.time && formData.endDate && formData.endTime) {
+        const startDateTime = new Date(`${formData.date}T${formData.time}`);
+        const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
+        if (endDateTime <= startDateTime) {
+          alert("종료 시간은 시작 시간보다 나중이어야 합니다.");
+          return;
+        }
+      }
       alert("모든 필수 항목을 입력해주세요.");
       return;
     }
@@ -92,6 +123,8 @@ function CreatePartyForm() {
       alert("파티 생성은 관리자만 가능합니다.");
       return;
     }
+
+    setIsSubmitting(true);
 
     try {
       const response = await fetch("/api/party/create", {
@@ -104,6 +137,8 @@ function CreatePartyForm() {
           description: formData.description,
           date: formData.date,
           time: formData.time,
+          endDate: formData.endDate || null,
+          endTime: formData.endTime || null,
           location: formData.location,
           maxParticipants: formData.maxParticipants,
         }),
@@ -118,10 +153,10 @@ function CreatePartyForm() {
       // 파티 생성 성공 시 해당 파티의 관리자 대시보드로 이동
       const partyId = result.data?.party?.id;
       if (partyId) {
-        alert("파티가 생성되었습니다!");
+        // alert("파티가 생성되었습니다!");
         router.push(`/admin/${partyId}/dashboard`);
       } else {
-        alert("파티가 생성되었습니다!");
+        // alert("파티가 생성되었습니다!");
         router.push("/");
       }
     } catch (error) {
@@ -129,7 +164,9 @@ function CreatePartyForm() {
       alert(
         error instanceof Error ? error.message : "파티 생성에 실패했습니다. 다시 시도해주세요.",
       );
+      setIsSubmitting(false); // 에러 발생 시 다시 시도 가능하도록
     }
+    // 성공 시에는 리다이렉트되므로 setIsSubmitting(false) 불필요
   };
 
   const handleCancel = () => {
@@ -194,17 +231,24 @@ function CreatePartyForm() {
                 />
               </div>
 
-              {/* 날짜 */}
+              {/* 시작 날짜 */}
               <div className="space-y-2">
                 <label htmlFor="date" className="text-sm font-medium flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  날짜 <span className="text-destructive">*</span>
+                  시작 날짜 <span className="text-destructive">*</span>
                 </label>
                 <Input
                   id="date"
                   type="date"
                   value={formData.date}
-                  onChange={(e) => handleInputChange("date", e.target.value)}
+                  onChange={(e) => {
+                    handleInputChange("date", e.target.value);
+                    // 시작 날짜가 변경되면 종료 날짜가 시작 날짜보다 이전이면 지움
+                    if (formData.endDate && e.target.value && formData.endDate < e.target.value) {
+                      handleInputChange("endDate", "");
+                      handleInputChange("endTime", "");
+                    }
+                  }}
                   required
                 />
               </div>
@@ -213,7 +257,7 @@ function CreatePartyForm() {
               <div className="space-y-2">
                 <label htmlFor="time" className="text-sm font-medium flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  시간 <span className="text-destructive">*</span>
+                  시작 시간 <span className="text-destructive">*</span>
                 </label>
                 <Input
                   id="time"
@@ -222,6 +266,64 @@ function CreatePartyForm() {
                   onChange={(e) => handleInputChange("time", e.target.value)}
                   required
                 />
+              </div>
+
+              {/* 종료 날짜 */}
+              <div className="space-y-2">
+                <label htmlFor="endDate" className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  종료 날짜 <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => {
+                    handleInputChange("endDate", e.target.value);
+                    // 종료 날짜를 지우면 종료 시간도 지움
+                    if (!e.target.value) {
+                      handleInputChange("endTime", "");
+                    }
+                  }}
+                  min={formData.date || undefined}
+                  disabled={!formData.date}
+                  required
+                />
+                {!formData.date && (
+                  <p className="text-xs text-muted-foreground">시작 날짜를 먼저 선택해주세요.</p>
+                )}
+              </div>
+
+              {/* 종료 시간 */}
+              <div className="space-y-2">
+                <label htmlFor="endTime" className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  종료 시간 <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) => handleInputChange("endTime", e.target.value)}
+                  disabled={!formData.endDate || !formData.date}
+                  required
+                />
+                {formData.endDate && formData.endTime && formData.date && formData.time && (
+                  <p className="text-xs text-muted-foreground">
+                    {(() => {
+                      const startDateTime = new Date(`${formData.date}T${formData.time}`);
+                      const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
+                      if (endDateTime <= startDateTime) {
+                        return (
+                          <span className="text-destructive">
+                            ⚠️ 종료 시간은 시작 시간보다 나중이어야 합니다.
+                          </span>
+                        );
+                      }
+                      return "종료 시간이 올바르게 설정되었습니다.";
+                    })()}
+                  </p>
+                )}
               </div>
 
               {/* 장소 */}
@@ -270,9 +372,9 @@ function CreatePartyForm() {
                   type="submit"
                   variant="primary"
                   className="flex-1"
-                  disabled={!isFormValid()}
+                  disabled={!isFormValid() || isSubmitting}
                 >
-                  파티 생성하기
+                  {isSubmitting ? "생성 중..." : "파티 생성하기"}
                 </Button>
               </div>
             </form>

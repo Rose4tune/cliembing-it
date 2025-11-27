@@ -20,13 +20,13 @@ interface TetrisBoardProps {
   board: BlockColor[][];
   currentPiece?: { x: number; y: number; shape: number[][]; color: BlockColor };
   specialLines?: number[]; // 특수 라인 위치 (y 좌표)
-  nextPieces?: BlockColor[]; // 대기 중인 블럭들
+  nextPieces?: BlockColor[] | Array<{ type: string; color: BlockColor }>; // 대기 중인 블럭들 (타입 정보 포함 가능)
 }
 
 export function TetrisBoard({
   board,
   currentPiece,
-  specialLines = [5, 10, 15],
+  specialLines = [4, 9, 14, 19],
   nextPieces = [],
 }: TetrisBoardProps) {
   // 보드와 현재 조각을 합쳐서 표시
@@ -103,22 +103,80 @@ export function TetrisBoard({
     ],
   };
 
-  // 블럭 색상에 따라 모양 할당 (반복 가능하도록 순환)
-  const getShapeForColor = (color: BlockColor, index: number): number[][] => {
+  // 블럭 타입 또는 색상에 따라 모양 할당
+  const getShapeForPiece = (
+    piece: BlockColor | { type: string; color: BlockColor } | null,
+    index: number,
+  ): number[][] => {
+    if (!piece) return [];
+    // 블럭 타입 정보가 있으면 해당 타입 사용
+    if (typeof piece === "object" && "type" in piece) {
+      const blockType = piece.type;
+      // 블럭 타입 이름 매핑 (API에서 오는 이름 -> tetrisShapes 키)
+      const typeMap: Record<string, string> = {
+        T: "T",
+        O: "O",
+        I: "I",
+        S: "S",
+        Z: "Z",
+        "L-left": "L",
+        "L-right": "J",
+        special: "special",
+      };
+      const shapeKey = typeMap[blockType] || blockType;
+      if (shapeKey === "special") return [];
+      const shape = tetrisShapes[shapeKey];
+      if (shape) return shape;
+    }
+
+    // 블럭 타입 정보가 없으면 색상으로 역매핑 시도
+    const color = typeof piece === "object" && "color" in piece ? piece.color : piece;
     if (color === "special" || !color) return [];
 
+    // 색상 -> 블럭 타입 역매핑
+    const colorToType: Record<string, string> = {
+      blue: "T",
+      pink: "O",
+      purple: "I",
+      red: "S",
+      green: "Z",
+      orange: "L-right",
+      yellow: "L-left",
+    };
+
+    const blockType = colorToType[color];
+    if (blockType) {
+      const typeMap: Record<string, string> = {
+        T: "T",
+        O: "O",
+        I: "I",
+        S: "S",
+        Z: "Z",
+        "L-left": "L",
+        "L-right": "J",
+      };
+      const shapeKey = typeMap[blockType];
+      if (shapeKey) {
+        const shape = tetrisShapes[shapeKey];
+        if (shape) return shape;
+      }
+    }
+
+    // 폴백: 인덱스 기반 (기존 방식)
     const shapeKeys = Object.keys(tetrisShapes);
     if (shapeKeys.length === 0) return [];
-
     const shapeKey = shapeKeys[index % shapeKeys.length];
     if (!shapeKey) return [];
-
     const shape = tetrisShapes[shapeKey];
     return shape || [];
   };
 
   // 블럭 미리보기 렌더링
-  const getBlockPreview = (color: BlockColor | null, index: number) => {
+  const getBlockPreview = (
+    piece: BlockColor | { type: string; color: BlockColor } | null,
+    index: number,
+  ) => {
+    const color = typeof piece === "object" && piece && "color" in piece ? piece.color : piece;
     if (!color) return null;
 
     if (color === "special") {
@@ -129,7 +187,7 @@ export function TetrisBoard({
       );
     }
 
-    const shape = getShapeForColor(color, index);
+    const shape = piece ? getShapeForPiece(piece, index) : null;
     if (!shape || shape.length === 0) {
       // 폴백: 색상 블럭만 표시
       return <div className={cn("w-full h-full rounded-sm", getBlockColor(color))} />;
@@ -170,7 +228,7 @@ export function TetrisBoard({
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-4">
       {/* 게임 보드 */}
       <div className="relative bg-gray-900 rounded-lg p-2 border-2 border-gray-700 flex-5">
         <div className="grid" style={{ gridTemplateColumns: `repeat(${BOARD_WIDTH}, 1fr)` }}>
@@ -184,17 +242,15 @@ export function TetrisBoard({
                 <div
                   key={`${rowIndex}-${colIndex}`}
                   className={cn(
-                    "aspect-square border border-gray-700 rounded-sm",
+                    "aspect-square",
                     getBlockColor(block),
                     isCurrent && "ring-2 ring-white ring-opacity-50",
                     isSpecialLine && "relative",
                   )}
                 >
-                  {/* 특수 라인 표시 */}
+                  {/* 특수 라인 표시 - 블럭이 있든 없든 항상 표시 */}
                   {isSpecialLine && (
-                    <div className="absolute inset-0 border-t-2 border-yellow-400 opacity-50 flex items-center justify-end pr-1">
-                      {/* <span className="text-xs text-yellow-400 font-bold">특수</span> */}
-                    </div>
+                    <div className="absolute inset-0 border-t-2 border-yellow-400 opacity-50 z-10 pointer-events-none" />
                   )}
                 </div>
               );
@@ -204,10 +260,12 @@ export function TetrisBoard({
       </div>
 
       {/* 대기 중인 블럭 영역 */}
-      {nextPieces.length > 0 && (
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 flex-1">
-          <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
-            {nextPieces.map((piece, index) => (
+      <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 flex-1">
+        <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
+          {nextPieces.map((piece, index) => {
+            if (!piece) return null;
+            const color = typeof piece === "object" && "color" in piece ? piece.color : piece;
+            return (
               <div
                 key={index}
                 className={cn(
@@ -217,10 +275,10 @@ export function TetrisBoard({
               >
                 {piece && getBlockPreview(piece, index)}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }

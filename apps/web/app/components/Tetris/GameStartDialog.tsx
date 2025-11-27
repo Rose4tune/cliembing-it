@@ -14,11 +14,28 @@ interface GameStartDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
+  onCancel?: () => void; // 취소 시 추가 처리
 }
 
-export function GameStartDialog({ open, onOpenChange, onConfirm }: GameStartDialogProps) {
+export function GameStartDialog({ open, onOpenChange, onConfirm, onCancel }: GameStartDialogProps) {
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    }
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && onCancel) {
+          // 다이얼로그가 닫힐 때 (X 버튼 등)도 취소 처리
+          onCancel();
+        }
+        onOpenChange(isOpen);
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>게임 시작</DialogTitle>
@@ -27,7 +44,7 @@ export function GameStartDialog({ open, onOpenChange, onConfirm }: GameStartDial
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+          <Button variant="secondary" onClick={handleCancel}>
             취소
           </Button>
           <Button

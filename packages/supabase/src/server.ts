@@ -5,6 +5,9 @@ import { cookies } from "next/headers";
 /**
  * 서버 환경에서 사용하는 Supabase 클라이언트
  * RLS 정책이 적용됩니다.
+ *
+ * 주의: NextAuth를 사용하는 경우 auth.uid()가 null일 수 있습니다.
+ * 이 경우 RLS 정책에서 public.users 테이블을 직접 참조하도록 수정해야 합니다.
  */
 export async function createServerClient() {
   const cookieStore = await cookies();
@@ -29,6 +32,45 @@ export async function createServerClient() {
       },
     },
   );
+}
+
+/**
+ * 사용자 ID를 명시적으로 설정한 Supabase 클라이언트
+ * NextAuth 세션의 사용자 ID를 RLS 정책에서 사용할 수 있도록 설정
+ *
+ * @param userId - public.users 테이블의 사용자 ID
+ */
+export async function createServerClientWithUser(userId: string) {
+  const cookieStore = await cookies();
+
+  const client = createSupabaseServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options),
+            );
+          } catch {
+            // Server Component에서는 쿠키 설정이 안 될 수 있음
+          }
+        },
+      },
+      global: {
+        headers: {
+          // 사용자 ID를 헤더로 전달 (Supabase RPC 함수에서 사용)
+          "x-user-id": userId,
+        },
+      },
+    },
+  );
+
+  return client;
 }
 
 /**

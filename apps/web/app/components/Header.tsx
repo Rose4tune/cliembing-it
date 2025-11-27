@@ -3,10 +3,10 @@
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@pkg/ui-web";
-import { Moon, Sun, ArrowLeft, User, Shield } from "lucide-react";
+import { Moon, Sun, ArrowLeft, User, Shield, Menu } from "lucide-react";
 import { useViewMode } from "../contexts/ViewModeContext";
 
 interface HeaderProps {
@@ -16,6 +16,7 @@ interface HeaderProps {
   userName?: string;
   team?: string;
   level?: string;
+  onMenuClick?: () => void;
 }
 
 export function Header({
@@ -25,10 +26,12 @@ export function Header({
   userName,
   team,
   level,
+  onMenuClick,
 }: HeaderProps) {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const { viewMode, changeViewMode, isAdminView } = useViewMode();
   const [permissions, setPermissions] = useState<{
@@ -36,6 +39,9 @@ export function Header({
     isStaff?: boolean;
     canToggle?: boolean;
   }>({});
+
+  // 관리자 페이지인지 확인
+  const isAdminPage = pathname?.startsWith("/admin/");
 
   useEffect(() => {
     setMounted(true);
@@ -72,7 +78,20 @@ export function Header({
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-lg font-semibold">{title || "로그인"}</h1>
-          <div className="w-9" /> {/* Spacer for centering */}
+          {/* 모바일에서 관리자 페이지일 때만 메뉴 버튼 표시 */}
+          {isAdminPage && onMenuClick ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onMenuClick}
+              aria-label="메뉴 열기"
+              className="md:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          ) : (
+            <div className="w-9" /> // Spacer for centering
+          )}
         </div>
       </header>
     );

@@ -79,7 +79,7 @@ export default function Home() {
                 </>
               )}
 
-              <GamePreviewCard />
+              {/* <GamePreviewCard /> */}
             </>
           )}
         </div>

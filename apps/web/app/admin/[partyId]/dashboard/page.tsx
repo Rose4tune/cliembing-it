@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { Header } from "../../../components/Header";
-import { FooterNavigation } from "../../../components/FooterNavigation";
-import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
+import { AdminSidebar } from "../../../components/AdminSidebar";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@pkg/ui-web";
 import { Button } from "@pkg/ui-web";
 import {
   PARTY_STATUS_LABELS,
@@ -13,8 +13,9 @@ import {
   type PartyStatus,
   type Party,
 } from "@pkg/shared";
-import { Calendar, Users, FileText, Code } from "lucide-react";
+import { Calendar, Users, FileText, Code, Play, Pause } from "lucide-react";
 import { useViewMode } from "../../../contexts/ViewModeContext";
+import { createClient } from "@pkg/supabase/client";
 
 export default function AdminDashboardPage() {
   const { data: session, status } = useSession();
@@ -27,6 +28,10 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState(false);
+  const [teams, setTeams] = useState<
+    Array<{ id: string; name: string; gameSessionStatus?: string }>
+  >([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // 인증 및 권한 체크
   useEffect(() => {
@@ -45,7 +50,7 @@ export default function AdminDashboardPage() {
           console.log("권한 확인 응답:", { response: response.status, result });
 
           if (result.success) {
-            const { isAdmin, isStaff, canAccessAdminView } = result.data;
+            const { isAdmin } = result.data;
 
             // 관리자 모드이고 관리자 권한이 있을 때만 접근 가능
             if (isAdminView && isAdmin) {
@@ -137,6 +142,106 @@ export default function AdminDashboardPage() {
     fetchParty();
   }, [partyId, status, hasAccess]);
 
+  // 팀 목록 및 게임 세션 상태 조회
+  useEffect(() => {
+    if (!partyId || status !== "authenticated" || !hasAccess || party?.status !== "running") return;
+
+    const fetchTeamsAndGames = async () => {
+      try {
+        // 팀 목록 조회
+        const teamsResponse = await fetch(`/api/admin/${partyId}/teams`);
+        const teamsResult = await teamsResponse.json();
+
+        if (teamsResponse.ok && teamsResult.success && teamsResult.data) {
+          const teamsData = teamsResult.data;
+
+          // 각 팀의 게임 세션 상태 조회
+          const teamsWithGameStatus = await Promise.all(
+            teamsData.map(async (team: any) => {
+              try {
+                const gameResponse = await fetch(
+                  `/api/party/${partyId}/game-session?teamId=${team.id}`,
+                );
+                const gameResult = await gameResponse.json();
+
+                return {
+                  id: team.id,
+                  name: team.name,
+                  gameSessionStatus:
+                    gameResult.success && gameResult.data ? gameResult.data.status : null,
+                };
+              } catch {
+                return {
+                  id: team.id,
+                  name: team.name,
+                  gameSessionStatus: null,
+                };
+              }
+            }),
+          );
+
+          setTeams(teamsWithGameStatus);
+        }
+      } catch (err) {
+        console.error("팀 및 게임 상태 조회 에러:", err);
+      }
+    };
+
+    fetchTeamsAndGames();
+
+    // Supabase Realtime 구독: 팀 및 게임 세션 변경 시 자동 업데이트
+    const supabase = createClient();
+    if (!supabase) {
+      console.error("Supabase 클라이언트 생성 실패");
+      return;
+    }
+
+    console.log("🔄 관리자 대시보드 Realtime 구독 시작");
+
+    // 1. 팀 목록 변경 감지
+    const teamsChannel = supabase
+      .channel(`admin_teams_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE 모두 감지
+          schema: "public",
+          table: "teams",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("📡 팀 목록 변경 감지:", payload);
+          fetchTeamsAndGames(); // 팀 목록 다시 조회
+        },
+      )
+      .subscribe();
+
+    // 2. 게임 세션 상태 변경 감지
+    const gameSessionsChannel = supabase
+      .channel(`admin_game_sessions_${partyId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE 모두 감지
+          schema: "public",
+          table: "game_sessions",
+          filter: `party_id=eq.${partyId}`,
+        },
+        (payload) => {
+          console.log("📡 게임 세션 상태 변경 감지:", payload);
+          fetchTeamsAndGames(); // 게임 세션 상태 다시 조회
+        },
+      )
+      .subscribe();
+
+    // cleanup: 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      console.log("🔄 관리자 대시보드 Realtime 구독 해제");
+      supabase.removeChannel(teamsChannel);
+      supabase.removeChannel(gameSessionsChannel);
+    };
+  }, [partyId, status, hasAccess, party?.status]);
+
   const handleStatusChange = async (newStatus: PartyStatus) => {
     if (!partyId) return;
 
@@ -164,7 +269,7 @@ export default function AdminDashboardPage() {
 
       // 파티 정보 다시 조회
       setParty(result.data.party);
-      alert("파티 상태가 변경되었습니다.");
+      // alert("파티 상태가 변경되었습니다.");
     } catch (err) {
       console.error("상태 변경 에러:", err);
       alert(err instanceof Error ? err.message : "상태 변경에 실패했습니다");
@@ -185,9 +290,9 @@ export default function AdminDashboardPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <Header variant="login" title="파티 대시보드" />
-        <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-24">
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="파티 대시보드" onMenuClick={() => setSidebarOpen(true)} />
+        <main className="flex-1 px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center text-red-600">{error}</div>
@@ -203,9 +308,9 @@ export default function AdminDashboardPage() {
 
   if (!party) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <Header variant="login" title="파티 대시보드" />
-        <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-24">
+      <div className="flex min-h-screen flex-col md:ml-20">
+        <Header variant="login" title="파티 대시보드" onMenuClick={() => setSidebarOpen(true)} />
+        <main className="flex-1 px-4 py-8 space-y-6 pb-6">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">파티를 찾을 수 없습니다.</div>
@@ -224,16 +329,17 @@ export default function AdminDashboardPage() {
   const statusLabel = PARTY_STATUS_LABELS[party.status as PartyStatus] || party.status;
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header variant="login" title="파티 관리 대시보드" />
+    <div className="flex min-h-screen flex-col md:ml-20">
+      <AdminSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
+      <Header variant="login" title="파티 관리 대시보드" onMenuClick={() => setSidebarOpen(true)} />
 
-      <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-6 pb-24">
+      <main className="px-4 py-8 space-y-6">
         {/* 파티 정보 카드 */}
-        <Card>
+        <Card className="max-w-[600px]">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>{party.name}</CardTitle>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColor}`}>
+              <span className={`px-3 py-1 rounded-full text-md font-semibold ${statusColor}`}>
                 {statusLabel}
               </span>
             </div>
@@ -294,76 +400,52 @@ export default function AdminDashboardPage() {
               </div>
             )}
           </CardContent>
+          <CardFooter className="block space-y-2 max-w-[300px] mt-8">
+            <div className="text-md font-semibold text-foreground mb-2">파티 상태 관리</div>
+
+            {party.status !== "running" && (
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => handleStatusChange("running")}
+                className="w-full"
+              >
+                시작하기
+              </Button>
+            )}
+            {party.status !== "ready" && party.status !== "ended" && party.status === "running" && (
+              <>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => handleStatusChange("ready")}
+                  className="w-full"
+                >
+                  진행 취소
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  onClick={() => handleStatusChange("ended")}
+                  className="w-full"
+                >
+                  종료하기
+                </Button>
+              </>
+            )}
+            {party.status === "ended" && (
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => handleStatusChange("archived")}
+                className="w-full"
+              >
+                아카이브
+              </Button>
+            )}
+          </CardFooter>
         </Card>
-
-        {/* 상태 변경 카드 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>파티 상태 관리</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-600 mb-4">
-                현재 상태: <span className="font-semibold">{statusLabel}</span>
-              </p>
-
-              <div className="grid grid-cols-2 gap-2">
-                {party.status !== "running" && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => handleStatusChange("running")}
-                    className="w-full"
-                  >
-                    시작하기
-                  </Button>
-                )}
-                {party.status !== "ready" &&
-                  party.status !== "ended" &&
-                  party.status === "running" && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleStatusChange("ready")}
-                        className="w-full"
-                      >
-                        진행 취소
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleStatusChange("ended")}
-                        className="w-full"
-                      >
-                        종료하기
-                      </Button>
-                    </>
-                  )}
-                {party.status === "ended" && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleStatusChange("archived")}
-                    className="w-full"
-                  >
-                    아카이브
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 액션 버튼 */}
-        <div className="space-y-2">
-          <Button variant="secondary" className="w-full" onClick={() => router.push("/")}>
-            홈으로 돌아가기
-          </Button>
-        </div>
       </main>
-
-      <FooterNavigation />
     </div>
   );
 }
