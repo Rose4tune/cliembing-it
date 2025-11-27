@@ -50,6 +50,9 @@ export const TETRIS_SHAPES: Record<string, number[][]> = {
     [0, 0, 1],
     [1, 1, 1],
   ],
+  special: [
+    [1], // 특수 블럭은 1x1 크기
+  ],
 };
 
 // 블럭 타입 이름 매핑
@@ -84,8 +87,11 @@ export interface GameState {
  * 블럭 타입으로부터 모양 가져오기
  */
 export function getShapeForBlockType(blockType: BlockType): number[][] {
+  if (blockType === "special") {
+    return TETRIS_SHAPES["special"] || [[1]];
+  }
   const shapeKey = BLOCK_TYPE_MAP[blockType];
-  if (!shapeKey || shapeKey === "special") return [];
+  if (!shapeKey) return [];
   return TETRIS_SHAPES[shapeKey] || [];
 }
 

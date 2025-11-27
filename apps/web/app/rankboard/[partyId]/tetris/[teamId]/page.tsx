@@ -68,7 +68,8 @@ export default function TetrisPage() {
       .map(() => Array(BOARD_WIDTH).fill(null)),
   );
   const [currentPiece, setCurrentPiece] = useState<TetrisPiece | null>(null);
-  const [previousHeight, setPreviousHeight] = useState(0);
+  const [currentBlockId, setCurrentBlockId] = useState<string | null>(null); // 현재 사용 중인 블럭 ID 추적
+  const previousHeightRef = useRef(0); // useRef로 변경하여 동기적 관리
   const [isSpecialBlock, setIsSpecialBlock] = useState(false);
   const [loading, setLoading] = useState(true);
   const [party, setParty] = useState<Party | null>(null);
@@ -307,6 +308,12 @@ export default function TetrisPage() {
                     "개",
                   );
                 }
+              }
+
+              // previousHeight 복원: 게임 세션이 로드될 때 현재 보드의 최고 높이로 설정
+              if (session.board_snapshot?.board) {
+                const restoredBoard = session.board_snapshot.board as BlockColor[][];
+                previousHeightRef.current = calculateHighestHeight(restoredBoard);
               }
             } else if (session.board_state) {
               // 하위 호환성: board_state 사용
@@ -899,12 +906,14 @@ export default function TetrisPage() {
   const spawnNextPiece = useCallback(() => {
     if (remainingPieces.length === 0) {
       setCurrentPiece(null);
+      setCurrentBlockId(null);
       return;
     }
 
     const nextPieceData = remainingPieces[0];
     if (!nextPieceData) {
       setCurrentPiece(null);
+      setCurrentBlockId(null);
       return;
     }
 
@@ -912,7 +921,8 @@ export default function TetrisPage() {
     const isSpecial = blockType === "special";
     const newPiece = createNewPiece(blockType, 3, 0);
 
-    // remainingPieces에서 제거하지 않음 (블럭 고정 시점에 handlePieceLock에서 제거)
+    // 현재 사용 중인 블럭 ID 저장 (블럭 고정 시 소비하기 위해)
+    setCurrentBlockId(nextPieceData.id);
     setCurrentPiece(newPiece);
     setIsSpecialBlock(isSpecial);
   }, [remainingPieces]);
@@ -936,10 +946,15 @@ export default function TetrisPage() {
       const newScore = calculateTetrisScore(newBoard);
       setTeamTotalScore(newScore);
 
-      // 4. 블럭 소비 처리 (remainingPieces의 첫 번째 블럭)
-      if (remainingPieces.length > 0 && partyId && teamId && gameState === "running") {
-        const usedBlock = remainingPieces[0];
-        if (usedBlock && usedBlock.id) {
+      // 4. 블럭 소비 처리 (currentBlockId 사용 - spawnNextPiece에서 설정됨)
+      if (currentBlockId && partyId && teamId && gameState === "running") {
+        // 임시 ID 블럭은 소비하지 않음 (DB에 존재하지 않음)
+        if (currentBlockId.startsWith("temp-") || currentBlockId.startsWith("special-")) {
+          console.warn("임시 ID 블럭은 소비하지 않습니다:", currentBlockId);
+          // 임시 ID 블럭은 remainingPieces에서만 제거
+          setRemainingPieces((prev) => prev.filter((p) => p.id !== currentBlockId));
+          setCurrentBlockId(null);
+        } else {
           try {
             const consumeResponse = await fetch(`/api/party/${partyId}/game-session`, {
               method: "POST",
@@ -947,16 +962,40 @@ export default function TetrisPage() {
               body: JSON.stringify({
                 teamId,
                 action: "consume_block",
-                blockEventId: usedBlock.id,
+                blockEventId: currentBlockId,
               }),
             });
 
-            if (consumeResponse.ok) {
-              // 블럭 소비 성공: remainingPieces에서 제거
+            const consumeResult = await consumeResponse.json().catch(() => null);
+
+            if (consumeResponse.ok && consumeResult?.success) {
+              // 블럭 소비 성공: remainingPieces에서 제거하고 currentBlockId 초기화
               setRemainingPieces((prev) => {
-                const updated = prev.slice(1);
-                // 남은 블럭이 0개이고 현재 블럭도 없으면 게임 세션을 pending으로 변경
-                if (updated.length === 0 && !currentPiece && partyId && teamId) {
+                const updated = prev.filter((p) => p.id !== currentBlockId);
+
+                // 블럭 소비 성공 후 게임 상태 저장 (availableBlocks 업데이트)
+                if (partyId && teamId && gameState === "running") {
+                  fetch(`/api/party/${partyId}/game-session`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      teamId,
+                      action: "update",
+                      boardSnapshot: {
+                        board: newBoard,
+                        availableBlocks: updated.map((p) => ({
+                          id: p.id,
+                          block_type: p.type,
+                        })),
+                      },
+                      totalScore: newScore,
+                      completedLines: newCompletedLines,
+                    }),
+                  }).catch((err) => console.error("게임 상태 저장 실패:", err));
+                }
+
+                // 남은 블럭이 0개이고 다음 블럭도 없으면 게임 세션을 pending으로 변경
+                if (updated.length === 0 && partyId && teamId) {
                   // 블럭이 모두 소진되었으므로 게임 세션을 pending으로 변경 (파티 진행 중이면)
                   fetch(`/api/party/${partyId}/game-session`, {
                     method: "POST",
@@ -998,20 +1037,39 @@ export default function TetrisPage() {
                 }
                 return updated;
               });
+              setCurrentBlockId(null);
             } else {
-              console.error("블럭 소비 실패:", await consumeResponse.text());
+              // 블럭 소비 실패: 에러 로그만 남기고 remainingPieces 유지 (소비 재시도 가능)
+              const errorText = consumeResult?.error || "알 수 없는 오류";
+              console.error("❌ 블럭 소비 실패 (블럭 유지):", {
+                blockEventId: currentBlockId,
+                status: consumeResponse.status,
+                error: errorText,
+              });
+              // remainingPieces는 유지하고 currentBlockId도 유지 (재시도 가능)
+              // 실패한 블럭을 다시 소비하려고 시도할 수 있도록 함
             }
           } catch (err) {
-            console.error("블럭 소비 API 호출 실패:", err);
+            console.error("블럭 소비 API 호출 실패 (블럭 유지):", err);
+            // 네트워크 에러 등: remainingPieces 유지, 재시도 가능
           }
         }
+      } else if (!currentBlockId && remainingPieces.length > 0) {
+        // currentBlockId가 없는데 remainingPieces가 있으면 로그만 남김 (비정상 상태)
+        console.warn(
+          "⚠️ 블럭 소비 시도했지만 currentBlockId가 없습니다. remainingPieces:",
+          remainingPieces.length,
+        );
       }
 
       // 5. 최고 높이 계산 및 특수 블럭 획득 체크
       // 자동 하강 중에는 특수 블럭을 생성하지 않음 (블럭이 고정될 때만 체크)
       const currentHeight = calculateHighestHeight(newBoard);
+      const previousHeight = previousHeightRef.current;
       // 블럭이 고정된 후에만 특수 블럭 체크 (자동 하강 중이 아닐 때)
       if (checkSpecialBlockReward(currentHeight, previousHeight)) {
+        // previousHeight를 즉시 업데이트하여 중복 체크 방지
+        previousHeightRef.current = currentHeight;
         // 특수 블럭 획득 (특수 라인 통과 시)
         if (partyId && teamId) {
           fetch(`/api/party/${partyId}/team-blocks`, {
@@ -1033,52 +1091,21 @@ export default function TetrisPage() {
                     { id: result.data.blockId, type: "special", color: "special" },
                   ]);
                 } else {
-                  // 블럭 ID가 없으면 임시 ID 사용 (나중에 재조회 필요)
-                  console.warn("특수 블럭 ID를 받지 못했습니다. 임시 ID 사용");
-                  setRemainingPieces((prev) => [
-                    ...prev,
-                    { id: `special-${Date.now()}`, type: "special", color: "special" },
-                  ]);
+                  // 블럭 ID가 없으면 블럭을 추가하지 않음 (에러만 로그)
+                  console.error("특수 블럭 ID를 받지 못했습니다. 블럭을 추가하지 않습니다.");
                 }
               } else {
                 console.error("특수 블럭 획득 실패:", await response.text());
               }
             })
             .catch((err) => console.error("특수 블럭 획득 API 호출 실패:", err));
-        } else {
-          // API 호출 불가 시 임시 ID 사용
-          setRemainingPieces((prev) => [
-            ...prev,
-            { id: `special-${Date.now()}`, type: "special", color: "special" },
-          ]);
         }
-        setPreviousHeight(currentHeight);
       } else {
-        setPreviousHeight(currentHeight);
+        // 특수 블럭 획득하지 않아도 previousHeight 업데이트
+        previousHeightRef.current = currentHeight;
       }
 
-      // 6. 게임 상태 저장 (비동기로 저장, 에러 무시)
-      if (partyId && teamId && gameState === "running") {
-        fetch(`/api/party/${partyId}/game-session`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            teamId,
-            action: "update",
-            boardSnapshot: {
-              board: newBoard,
-              availableBlocks: remainingPieces.slice(1).map((p) => ({
-                id: p.id,
-                block_type: p.type,
-              })),
-            },
-            totalScore: newScore,
-            completedLines: newCompletedLines,
-          }),
-        }).catch((err) => console.error("게임 상태 저장 실패:", err));
-      }
-
-      // 7. 다음 블럭 생성
+      // 6. 다음 블럭 생성 (블럭 소비 성공 후 availableBlocks는 이미 저장됨)
       setCurrentPiece(null);
       setTimeout(() => {
         spawnNextPiece();
@@ -1087,12 +1114,13 @@ export default function TetrisPage() {
     [
       board,
       completedLines,
-      previousHeight,
       spawnNextPiece,
       remainingPieces,
       gameState,
       partyId,
       teamId,
+      currentBlockId,
+      currentPiece,
     ],
   );
 

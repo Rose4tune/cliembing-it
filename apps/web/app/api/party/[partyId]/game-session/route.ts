@@ -692,6 +692,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       const gameSessionId = runningSessionResult.data.id;
 
       // team_block_events에서 블럭 확인 및 game_session_id 직접 업데이트
+      // 먼저 블럭이 존재하는지 확인
+      const blockCheckResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("team_block_events")
+          .select("id, block_type, game_session_id")
+          .eq("id", blockEventId)
+          .eq("party_id", partyId)
+          .eq("team_id", teamId)
+          .maybeSingle();
+      });
+
+      console.log("🔍 [블럭 소비] 블럭 확인 결과:", {
+        success: blockCheckResult.success,
+        hasData: !!blockCheckResult.data,
+        data: blockCheckResult.data,
+        error: blockCheckResult.error,
+      });
+
+      // 블럭이 존재하지 않으면 에러
+      if (!blockCheckResult.success || !blockCheckResult.data) {
+        return errorResponse(`블럭을 찾을 수 없습니다 (blockEventId: ${blockEventId})`, 404);
+      }
+
+      // 이미 사용된 블럭이면 에러
+      if (blockCheckResult.data.game_session_id !== null) {
+        return errorResponse(
+          `블럭이 이미 사용되었습니다 (game_session_id: ${blockCheckResult.data.game_session_id})`,
+          409,
+        );
+      }
+
+      // 블럭 업데이트 (game_session_id 설정)
       const updateResult = await executeSupabaseQuery(async () => {
         return await supabase
           .from("team_block_events")
@@ -701,7 +733,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
           .eq("team_id", teamId)
           .is("game_session_id", null) // 아직 사용되지 않은 블럭만 업데이트
           .select("id, block_type")
-          .single();
+          .maybeSingle();
       });
 
       console.log("🔍 [블럭 소비] 업데이트 결과:", {
@@ -711,14 +743,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
         error: updateResult.error,
       });
 
+      // 업데이트 실패 시 (경쟁 조건으로 인해 다른 요청이 먼저 소비한 경우)
       if (!updateResult.success || !updateResult.data) {
-        // 업데이트된 레코드가 없으면 이미 사용되었거나 존재하지 않는 블럭
-        if (updateResult.error) {
-          console.error("블럭 소비 실패:", updateResult.error);
-        }
         return errorResponse(
-          updateResult.error?.message || "블럭을 찾을 수 없거나 이미 사용되었습니다",
-          404,
+          updateResult.error?.message || "블럭을 소비하는 중 문제가 발생했습니다",
+          409,
         );
       }
 
