@@ -1,3 +1,13 @@
+## <small>0.1.2 (2025-11-27)</small>
+
+- fix: 파티 참가 오류 수정 ([176b3b8](https://github.com/Rose4tune/cliembing-it/commit/176b3b8))
+- hotfix: 파티 참가 에러 수정 ([937bcaf](https://github.com/Rose4tune/cliembing-it/commit/937bcaf))
+- feat/#16 테스트 환경 셋팅 (#17) ([0b4b197](https://github.com/Rose4tune/cliembing-it/commit/0b4b197)), closes [feat/#16](https://github.com/Rose4tune/cliembing-it/issues/16) [#17](https://github.com/Rose4tune/cliembing-it/issues/17)
+- feat/#18 메인 화면 UI 구현 (#19) ([e50e35f](https://github.com/Rose4tune/cliembing-it/commit/e50e35f)), closes [feat/#18](https://github.com/Rose4tune/cliembing-it/issues/18) [#19](https://github.com/Rose4tune/cliembing-it/issues/19)
+- feat/#20 기능 구현 (#25) ([bdd4283](https://github.com/Rose4tune/cliembing-it/commit/bdd4283)), closes [feat/#20](https://github.com/Rose4tune/cliembing-it/issues/20) [#25](https://github.com/Rose4tune/cliembing-it/issues/25) [Feat/#21](https://github.com/Rose4tune/cliembing-it/issues/21) [#22](https://github.com/Rose4tune/cliembing-it/issues/22) [Feat/#23](https://github.com/Rose4tune/cliembing-it/issues/23) [#24](https://github.com/Rose4tune/cliembing-it/issues/24)
+- Merge pull request #26 from Rose4tune/dev ([f490035](https://github.com/Rose4tune/cliembing-it/commit/f490035)), closes [#26](https://github.com/Rose4tune/cliembing-it/issues/26)
+- chore: 오래된 커밋 린트 무시설정 및 이슈 템플릿 수정 ([ce619a3](https://github.com/Rose4tune/cliembing-it/commit/ce619a3))
+
 ## <small>0.1.1 (2025-11-12)</small>
 
 - fix: release version 수정 ([a95eb67](https://github.com/Rose4tune/cliembing-it/commit/a95eb67))
