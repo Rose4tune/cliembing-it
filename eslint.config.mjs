@@ -68,6 +68,7 @@ export default [
       "*.yaml",
       "*.yml",
       "tsconfig.json",
+      ".commitlintrc.js",
     ],
   },
 ];

@@ -1,9 +1,9 @@
 ---
 name: Config
 about: 설정 변경을 위한 이슈를 작성해주세요.
-title: "[Config] "
+title: "[config] "
 labels: config
-assignees: ''
+assignees: ""
 ---
 
 ## 설정 변경 목적
