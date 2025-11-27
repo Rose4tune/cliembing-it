@@ -190,8 +190,9 @@ export async function POST(request: Request) {
       memberData.level = finalLevel;
     }
 
+    // 파티 멤버 추가 (Service Role Key 사용하여 RLS 우회)
     const result = await executeSupabaseQuery(async () => {
-      return await supabase.from("party_members").insert(memberData).select().single();
+      return await supabaseForQuery.from("party_members").insert(memberData).select().single();
     });
 
     if (!result.success || !result.data) {

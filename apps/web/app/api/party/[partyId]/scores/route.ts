@@ -183,8 +183,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     // (승인 대기 레코드도 업데이트하지 않고 새로 생성하여 각 승인 요청을 독립적으로 관리)
 
     // 항상 새 레코드로 생성 (승인된 레코드나 승인 대기 레코드와 관계없이)
+    // Service Role Key 사용하여 RLS 정책 우회
     const result = await executeSupabaseQuery(async () => {
-      return await supabase
+      return await supabaseForQuery
         .from("level_scores")
         .insert({
           party_id: partyId,
