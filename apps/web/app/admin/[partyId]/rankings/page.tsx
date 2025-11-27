@@ -298,11 +298,6 @@ export default function RankingsPage() {
                             {ranking.attempts !== undefined && (
                               <div className="text-xs text-muted-foreground">
                                 {ranking.attempts}/2
-                                {ranking.failures !== undefined && ranking.failures > 0 && (
-                                  <span className="ml-1 text-red-600">
-                                    (실패: {ranking.failures})
-                                  </span>
-                                )}
                               </div>
                             )}
                           </div>

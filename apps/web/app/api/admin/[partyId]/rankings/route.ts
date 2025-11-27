@@ -38,7 +38,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     let gripRankings: any[] = [];
     let personalRankings: any[] = [];
     let teamRankings: any[] = [];
-    const challengeRankings: any[] = [];
+    let challengeRankings: any[] = [];
 
     // Crux 그룹 랭킹 조회 (SQL 함수 사용)
     const cruxResult = await executeSupabaseQuery(async () => {
@@ -147,30 +147,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       const teamChallengeMap = new Map<string, any>();
       if (challengeRecordsResult.success && challengeRecordsResult.data) {
         challengeRecordsResult.data.forEach((record: any) => {
-          if (record.status === "failed") return; // 실패 기록은 랭킹 계산에서 제외
-
           const teamId = record.team_id;
           if (!teamChallengeMap.has(teamId)) {
             teamChallengeMap.set(teamId, {
-              bestTime: record.duration,
-              bestStartedAt: record.started_at,
+              bestTime: null,
+              bestStartedAt: null,
               attempts: 0,
               failures: 0,
             });
           }
 
           const teamData = teamChallengeMap.get(teamId);
+          // 실패 기록도 attempts에 포함
           teamData.attempts += 1;
           if (record.status === "failed") {
             teamData.failures += 1;
-          }
-
-          // 더 빠른 시간 찾기
-          const currentBest = parseDurationToMs(teamData.bestTime);
-          const recordTime = parseDurationToMs(record.duration);
-          if (recordTime < currentBest) {
-            teamData.bestTime = record.duration;
-            teamData.bestStartedAt = record.started_at;
+          } else {
+            // 성공 기록만 최고 시간 계산에 포함
+            const currentBest = parseDurationToMs(teamData.bestTime);
+            const recordTime = parseDurationToMs(record.duration);
+            if (teamData.bestTime === null || recordTime < currentBest) {
+              teamData.bestTime = record.duration;
+              teamData.bestStartedAt = record.started_at;
+            }
           }
         });
       }

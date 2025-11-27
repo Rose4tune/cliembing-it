@@ -522,14 +522,7 @@ export default function RankboardPage() {
                               </p>
                               <div className="text-xs text-muted-foreground mt-0.5">
                                 {item.attempts !== undefined && (
-                                  <span>
-                                    도전: {item.attempts}/2
-                                    {item.failures !== undefined && item.failures > 0 && (
-                                      <span className="ml-1 text-red-600">
-                                        (실패: {item.failures})
-                                      </span>
-                                    )}
-                                  </span>
+                                  <span>도전: {item.attempts}/2</span>
                                 )}
                               </div>
                             </div>

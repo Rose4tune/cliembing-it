@@ -214,6 +214,12 @@ export default function ChallengesPage() {
   const handleCompleteClick = () => {
     // 종료 버튼을 누르면 즉시 타이머 멈춤
     if (timerState === "running") {
+      // 인터벌 즉시 정지
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      // 현재 경과 시간을 pausedTime에 저장하고 타이머 상태를 paused로 변경
       setPausedTime(elapsedTime);
       setTimerState("paused");
     }
@@ -224,6 +230,12 @@ export default function ChallengesPage() {
   const handleFailClick = () => {
     // 실패 버튼을 누르면 즉시 타이머 멈춤
     if (timerState === "running") {
+      // 인터벌 즉시 정지
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      // 현재 경과 시간을 pausedTime에 저장하고 타이머 상태를 paused로 변경
       setPausedTime(elapsedTime);
       setTimerState("paused");
     }
@@ -472,7 +484,7 @@ export default function ChallengesPage() {
           <CardContent className="pt-6">
             <div className="text-center space-y-6">
               <div className="text-7xl font-mono font-bold tracking-wider">
-                {formatTimer(elapsedTime)}
+                {formatTimer(timerState === "paused" ? pausedTime : elapsedTime)}
               </div>
               {selectedTeam && timerState === "idle" && (
                 <div className="text-sm text-muted-foreground">
