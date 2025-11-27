@@ -29,6 +29,9 @@ type ChallengeRanking = {
   teamId: string;
   teamName: string;
   time: string;
+  status?: "all_failed" | "success";
+  attempts?: number;
+  failures?: number;
 };
 
 export default function RankingsPage() {

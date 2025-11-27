@@ -45,7 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       return errorResponse("파티를 찾을 수 없습니다", 404);
     }
 
-    const party = partyResult.data;
+    const party = partyResult.data as { status: string; end_at: string | null };
     if (party.status === "finished" || (party.end_at && new Date(party.end_at) < new Date())) {
       return errorResponse("파티가 종료되어 챌린지 기록을 시작할 수 없습니다", 400);
     }

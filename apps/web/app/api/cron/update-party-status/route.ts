@@ -32,70 +32,61 @@ export async function GET(request: Request) {
     // 파티 상태 자동 업데이트
     const now = new Date().toISOString();
 
-    const result = await executeSupabaseQuery(async () => {
-      // 시작 시간이 된 파티를 'running'으로 변경
-      // 조건: status가 'draft' 또는 'ready'이고, start_at <= 현재 시간, end_at이 없거나 end_at > 현재 시간
-      const partiesToStart = await supabase
-        .from("parties")
-        .select("id, name, status, start_at, end_at")
-        .in("status", ["draft", "ready"])
-        .not("start_at", "is", null)
-        .lte("start_at", now);
+    // 시작 시간이 된 파티를 'running'으로 변경
+    // 조건: status가 'draft' 또는 'ready'이고, start_at <= 현재 시간, end_at이 없거나 end_at > 현재 시간
+    const partiesToStart = await supabase
+      .from("parties")
+      .select("id, name, status, start_at, end_at")
+      .in("status", ["draft", "ready"])
+      .not("start_at", "is", null)
+      .lte("start_at", now);
 
-      let startedCount = 0;
-      let startedParties: any[] = [];
+    let startedCount = 0;
+    let startedParties: any[] = [];
 
-      if (partiesToStart.data) {
-        // end_at 조건을 필터링 (Supabase 쿼리 빌더로는 복잡하므로 직접 필터링)
-        const validParties = partiesToStart.data.filter(
-          (party) => !party.end_at || new Date(party.end_at) > new Date(now),
-        );
+    if (partiesToStart.data) {
+      // end_at 조건을 필터링 (Supabase 쿼리 빌더로는 복잡하므로 직접 필터링)
+      const validParties = partiesToStart.data.filter(
+        (party) => !party.end_at || new Date(party.end_at) > new Date(now),
+      );
 
-        if (validParties.length > 0) {
-          const startResult = await supabase
-            .from("parties")
-            .update({ status: "running" })
-            .in(
-              "id",
-              validParties.map((p) => p.id),
-            )
-            .select("id, name, status");
+      if (validParties.length > 0) {
+        const startResult = await supabase
+          .from("parties")
+          .update({ status: "running" })
+          .in(
+            "id",
+            validParties.map((p) => p.id),
+          )
+          .select("id, name, status");
 
-          if (startResult.data) {
-            startedCount = startResult.data.length;
-            startedParties = startResult.data;
-          }
+        if (startResult.data) {
+          startedCount = startResult.data.length;
+          startedParties = startResult.data;
         }
       }
-
-      // 종료 시간이 된 파티를 'ended'로 변경
-      const endResult = await supabase
-        .from("parties")
-        .update({ status: "ended" })
-        .eq("status", "running")
-        .not("end_at", "is", null)
-        .lte("end_at", now)
-        .select("id, name, status");
-
-      return {
-        started: startedParties,
-        ended: endResult.data || [],
-        startedCount,
-        endedCount: endResult.data?.length || 0,
-      };
-    });
-
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || "Failed to update party status" },
-        { status: 500 },
-      );
     }
+
+    // 종료 시간이 된 파티를 'ended'로 변경
+    const endResult = await supabase
+      .from("parties")
+      .update({ status: "ended" })
+      .eq("status", "running")
+      .not("end_at", "is", null)
+      .lte("end_at", now)
+      .select("id, name, status");
+
+    const result = {
+      started: startedParties,
+      ended: endResult.data || [],
+      startedCount,
+      endedCount: endResult.data?.length || 0,
+    };
 
     return NextResponse.json({
       success: true,
       message: "Party status updated successfully",
-      data: result.data,
+      data: result,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

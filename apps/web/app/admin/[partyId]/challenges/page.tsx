@@ -449,12 +449,12 @@ export default function ChallengesPage() {
               {teams.map((team) => {
                 const attemptCount = getTeamAttemptCount(team.id);
                 const isSelected = selectedTeamId === team.id;
-                const isDisabled = attemptCount >= 2 || isPartyEnded;
+                const isDisabled = attemptCount >= 2 || !!isPartyEnded;
 
                 return (
                   <Button
                     key={team.id}
-                    variant={isSelected ? "default" : "outline"}
+                    variant={isSelected ? "primary" : "outline"}
                     size="sm"
                     onClick={() => !isDisabled && setSelectedTeamId(team.id)}
                     disabled={isDisabled}
@@ -525,7 +525,7 @@ export default function ChallengesPage() {
                   )}
                   <div className="grid grid-cols-2 gap-2">
                     <Button
-                      variant="default"
+                      variant="primary"
                       size="lg"
                       onClick={handleCompleteClick}
                       className="w-full"

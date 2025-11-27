@@ -147,9 +147,15 @@ export async function addBlockForScoreApproval(
       ? setData.left_block_type_id
       : setData.right_block_type_id;
 
+    const leftBlockType = Array.isArray(setData.left_block_type)
+      ? setData.left_block_type[0]
+      : setData.left_block_type;
+    const rightBlockType = Array.isArray(setData.right_block_type)
+      ? setData.right_block_type[0]
+      : setData.right_block_type;
     const blockTypeName = isLeftBlock
-      ? (setData.left_block_type as { name: string })?.name
-      : (setData.right_block_type as { name: string })?.name;
+      ? (leftBlockType as { name: string } | null)?.name
+      : (rightBlockType as { name: string } | null)?.name;
 
     if (!blockTypeId || !blockTypeName) {
       return {
@@ -191,7 +197,7 @@ export async function addBlockForScoreApproval(
     if (insertError) {
       console.error("❌ 블럭 추가 실패:", {
         error: insertError,
-        blockData,
+        blocksToInsert,
       });
       return {
         success: false,

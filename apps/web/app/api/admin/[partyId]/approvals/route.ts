@@ -295,7 +295,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       // approve_game: requesting → ready (관리자 승인 완료, 참가자 게임 시작 대기)
       // reject_game: requesting → cancelled (게임 요청 거부)
       const newStatus = action === "approve_game" ? "ready" : "cancelled";
-      const adminUserId = session.user.id;
+      const adminUserId = (session.user as { id?: string })?.id;
 
       const updateData: {
         status: string;
@@ -366,7 +366,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     const solvedLevel = scoreResult.data.level as ClimbingLevel;
 
     // 승인한 관리자 ID 가져오기
-    const adminUserId = session.user.id;
+    const adminUserId = (session.user as { id?: string })?.id;
 
     // level_scores의 approved, approved_by, approved_at 컬럼 업데이트
     const updateData: {

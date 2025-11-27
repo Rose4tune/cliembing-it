@@ -177,8 +177,12 @@ export async function PATCH(
       return errorResponse("멤버를 찾을 수 없습니다", 404);
     }
 
-    const existingTeamId = existingMemberResult.data.team_id;
-    const userId = existingMemberResult.data.user_id;
+    const existingMember = existingMemberResult.data as {
+      team_id: string | null;
+      user_id: string;
+    };
+    const existingTeamId = existingMember.team_id;
+    const userId = existingMember.user_id;
 
     // 업데이트할 데이터 준비
     const updateData: {

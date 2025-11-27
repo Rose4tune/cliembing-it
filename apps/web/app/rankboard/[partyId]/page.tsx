@@ -304,7 +304,15 @@ export default function RankboardPage() {
   const cruxRankings = rankingData.crux || [];
   const gripRankings = rankingData.grip || [];
   const currentGroupRankings = activeSubTab === "crux" ? cruxRankings : gripRankings;
-  const teamRankings = rankingData.team || [];
+  const teamRankings = (rankingData.team || []).map((team) => {
+    // teamName에서 숫자 추출 (예: "1조" -> 1)
+    const teamNumberMatch = team.teamName?.match(/(\d+)/);
+    const teamNumber = teamNumberMatch?.[1] ? parseInt(teamNumberMatch[1], 10) : 0;
+    return {
+      ...team,
+      teamNumber,
+    };
+  });
   const challengeRankings = rankingData.challenge || [];
   const partyInfo = rankingData.party;
 

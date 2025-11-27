@@ -9,8 +9,8 @@ function parseDurationToMs(duration: string | null): number {
   if (!duration) return Infinity;
   const minuteMatch = duration.match(/(\d+)분/);
   const secondMatch = duration.match(/(\d+)초/);
-  const minutes = minuteMatch ? parseInt(minuteMatch[1], 10) : 0;
-  const seconds = secondMatch ? parseInt(secondMatch[1], 10) : 0;
+  const minutes = minuteMatch?.[1] ? parseInt(minuteMatch[1], 10) : 0;
+  const seconds = secondMatch?.[1] ? parseInt(secondMatch[1], 10) : 0;
   return (minutes * 60 + seconds) * 1000;
 }
 

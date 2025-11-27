@@ -93,6 +93,8 @@ export async function dequeueRankingCalculation(
       };
     }
 
+    const queueItem = result.data as { id: string; party_id: string };
+
     // 상태를 processing으로 변경
     const updateResult = await executeQuery(async () => {
       return await supabase
@@ -101,7 +103,7 @@ export async function dequeueRankingCalculation(
           status: "processing",
           processed_at: new Date().toISOString(),
         })
-        .eq("id", result.data!.id)
+        .eq("id", queueItem.id)
         .select()
         .single();
     });
@@ -116,8 +118,8 @@ export async function dequeueRankingCalculation(
     return {
       success: true,
       item: {
-        id: result.data!.id,
-        party_id: result.data!.party_id,
+        id: queueItem.id,
+        party_id: queueItem.party_id,
       },
     };
   } catch (error) {

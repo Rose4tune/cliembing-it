@@ -51,21 +51,24 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return errorResponse("파티 멤버 정보를 찾을 수 없습니다", 404);
     }
 
+    const memberData = result.data as { team_id: string | null; [key: string]: any };
+
     // team_id가 있으면 teams 테이블에서 팀 이름 및 팀장 정보 조회
     let teamName = null;
     let isLeader = false;
-    if (result.data.team_id) {
+    if (memberData.team_id) {
       const teamResult = await executeSupabaseQuery(async () => {
         return await supabase
           .from("teams")
           .select("name, leader_id")
-          .eq("id", result.data.team_id)
+          .eq("id", memberData.team_id!)
           .single();
       });
 
       if (teamResult.success && teamResult.data) {
-        teamName = teamResult.data.name;
-        isLeader = teamResult.data.leader_id === userId;
+        const team = teamResult.data as { name: string; leader_id: string };
+        teamName = team.name;
+        isLeader = team.leader_id === userId;
       }
     }
 

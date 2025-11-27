@@ -135,7 +135,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       return errorResponse(result.error?.message || "팀을 생성할 수 없습니다", 500);
     }
 
-    const newTeam = result.data;
+    if (!result.data) {
+      return errorResponse("팀을 생성할 수 없습니다", 500);
+    }
+
+    const newTeam = result.data as { id: string };
 
     // 팀 생성 시 게임 세션도 함께 생성
     // 초기 상태는 'idle'로 하고 싶지만 스키마에 없으므로,
@@ -149,7 +153,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
     });
 
     const adminUserId =
-      adminResult.success && adminResult.data ? adminResult.data.id : session.user.id; // 관리자가 없으면 현재 사용자 ID 사용
+      adminResult.success && adminResult.data
+        ? (adminResult.data as { id: string }).id
+        : (session.user as { id?: string })?.id; // 관리자가 없으면 현재 사용자 ID 사용
 
     // 게임 세션 생성 (초기 상태: 'inactive' - 아직 게임 시작 요청 전)
     const gameSessionResult = await executeSupabaseQuery(async () => {
@@ -174,9 +180,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
       // 게임 세션 생성 실패해도 팀 생성은 성공한 것으로 처리
       // (나중에 수동으로 게임 세션을 생성할 수 있음)
     } else {
+      const gameSession = gameSessionResult.data as { id: string } | null;
       console.log("✅ 팀 및 게임 세션 생성 완료:", {
         teamId: newTeam.id,
-        gameSessionId: gameSessionResult.data?.id,
+        gameSessionId: gameSession?.id,
       });
     }
 
@@ -291,12 +298,18 @@ export async function DELETE(
     });
 
     // 게임 진행 기록 확인 (점수나 블럭 사용 기록이 있는지)
+    const gameSession = gameSessionResult.success
+      ? (gameSessionResult.data as {
+          total_score?: number | null;
+          lines_cleared?: number | null;
+          board_snapshot?: string | null;
+        } | null)
+      : null;
     const hasGameRecords =
-      gameSessionResult.success &&
-      gameSessionResult.data &&
-      ((gameSessionResult.data.total_score && gameSessionResult.data.total_score > 0) ||
-        (gameSessionResult.data.lines_cleared && gameSessionResult.data.lines_cleared > 0) ||
-        gameSessionResult.data.board_snapshot);
+      gameSession &&
+      ((gameSession.total_score && gameSession.total_score > 0) ||
+        (gameSession.lines_cleared && gameSession.lines_cleared > 0) ||
+        gameSession.board_snapshot);
 
     if (hasGameRecords) {
       // 게임 기록이 있으면 게임 세션을 완전 삭제하지 않고 비활성화

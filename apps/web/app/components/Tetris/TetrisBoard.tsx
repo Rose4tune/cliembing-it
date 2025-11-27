@@ -105,9 +105,10 @@ export function TetrisBoard({
 
   // 블럭 타입 또는 색상에 따라 모양 할당
   const getShapeForPiece = (
-    piece: BlockColor | { type: string; color: BlockColor },
+    piece: BlockColor | { type: string; color: BlockColor } | null,
     index: number,
   ): number[][] => {
+    if (!piece) return [];
     // 블럭 타입 정보가 있으면 해당 타입 사용
     if (typeof piece === "object" && "type" in piece) {
       const blockType = piece.type;
@@ -186,7 +187,7 @@ export function TetrisBoard({
       );
     }
 
-    const shape = getShapeForPiece(piece, index);
+    const shape = piece ? getShapeForPiece(piece, index) : null;
     if (!shape || shape.length === 0) {
       // 폴백: 색상 블럭만 표시
       return <div className={cn("w-full h-full rounded-sm", getBlockColor(color))} />;
@@ -262,6 +263,7 @@ export function TetrisBoard({
       <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 flex-1">
         <div className="flex flex-col gap-2 flex-1 overflow-y-auto">
           {nextPieces.map((piece, index) => {
+            if (!piece) return null;
             const color = typeof piece === "object" && "color" in piece ? piece.color : piece;
             return (
               <div

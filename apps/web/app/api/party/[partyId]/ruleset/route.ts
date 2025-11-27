@@ -58,8 +58,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       return errorResponse("파티 룰셋을 찾을 수 없습니다", 404);
     }
 
+    const ruleset = rulesetResult.data as { level_points?: any };
+
     return successResponse({
-      level_points: rulesetResult.data.level_points || null,
+      level_points: ruleset.level_points || null,
     });
   } catch (error) {
     console.error("룰셋 조회 에러:", error);

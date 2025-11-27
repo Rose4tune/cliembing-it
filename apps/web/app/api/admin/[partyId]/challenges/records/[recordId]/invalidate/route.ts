@@ -38,7 +38,13 @@ export async function PATCH(
       return errorResponse("챌린지 기록을 찾을 수 없습니다", 404);
     }
 
-    const record = recordResult.data;
+    const record = recordResult.data as {
+      id: string;
+      party_id: string;
+      team_id: string;
+      attempt_number: number;
+      status: string;
+    };
 
     // 이미 무효화된 경우
     if (record.status === "invalidated") {
@@ -56,16 +62,17 @@ export async function PATCH(
         .single();
     });
 
-    if (!updateResult.success) {
+    if (!updateResult.success || !updateResult.data) {
       return errorResponse(
         updateResult.error?.message || "챌린지 기록을 무효화할 수 없습니다",
         500,
       );
     }
 
+    const updatedRecord = updateResult.data as { id: string; status: string };
     return successResponse({
-      id: updateResult.data.id,
-      status: updateResult.data.status,
+      id: updatedRecord.id,
+      status: updatedRecord.status,
       message: "기록이 무효화되었습니다. 해당 팀은 다시 도전할 수 있습니다.",
     });
   } catch (error) {

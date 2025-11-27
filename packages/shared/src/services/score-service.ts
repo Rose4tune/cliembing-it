@@ -3,7 +3,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClimbingLevel, LevelPointsConfig } from "../score-calculation";
+import type { ClimbingLevel } from "../level";
+import type { LevelPointsConfig } from "../score-calculation";
 import {
   calculateScoreForLevel,
   calculateTotalScore,
