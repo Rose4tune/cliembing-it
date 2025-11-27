@@ -2,6 +2,11 @@ import { getServerSession, authOptions } from "@pkg/auth";
 import { createServerClient, createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
 
+type TeamMember = {
+  name: string;
+  level: string;
+};
+
 /**
  * 랭킹 조회 API (일반 사용자용)
  * GET /api/party/[partyId]/rankings
@@ -106,6 +111,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         rank: index + 1, // 전체 개인 랭킹 순위 재계산
       }));
 
+    // 모든 팀 조회 (게임 세션이 없어도 포함)
+    const allTeamsResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("teams")
+        .select("id, name")
+        .eq("party_id", partyId)
+        .order("name", { ascending: true });
+    });
+
     // 팀 랭킹 조회 (get_team_rankings_with_details 함수 사용)
     const teamRankingsResult = await executeSupabaseQuery(async () => {
       return await supabase.rpc("get_team_rankings_with_details", {
@@ -113,13 +127,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       });
     });
 
+    // 모든 팀을 포함하되, 랭킹 데이터가 있으면 사용
+    const teamRankingsMap = new Map<string, any>();
     if (teamRankingsResult.success && teamRankingsResult.data) {
-      teamRankings = teamRankingsResult.data.map((item: any) => {
-        // teamName에서 숫자 추출 (예: "1조" -> 1, "팀 2" -> 2)
+      teamRankingsResult.data.forEach((item: any) => {
         const teamNumberMatch = item.team_name?.match(/(\d+)/);
         const teamNumber = teamNumberMatch ? parseInt(teamNumberMatch[1], 10) : 0;
 
-        return {
+        teamRankingsMap.set(item.team_id, {
           rank: item.rank,
           teamNumber,
           teamId: item.team_id,
@@ -128,8 +143,81 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
           usedPieces: Number(item.used_pieces) || 0,
           totalPieces: Number(item.total_pieces) || 0,
           completedLines: Number(item.completed_lines) || 0,
-        };
+        });
       });
+    }
+
+    // 모든 팀을 포함 (랭킹 데이터가 없으면 0점으로 설정)
+    if (allTeamsResult.success && allTeamsResult.data) {
+      const existingRankingsCount = teamRankingsMap.size;
+      allTeamsResult.data.forEach((team: any, index: number) => {
+        if (!teamRankingsMap.has(team.id)) {
+          const teamNumberMatch = team.name?.match(/(\d+)/);
+          const teamNumber = teamNumberMatch ? parseInt(teamNumberMatch[1], 10) : index + 1;
+
+          teamRankingsMap.set(team.id, {
+            rank: existingRankingsCount + index + 1,
+            teamNumber,
+            teamId: team.id,
+            teamName: team.name,
+            totalScore: 0,
+            usedPieces: 0,
+            totalPieces: 0,
+            completedLines: 0,
+          });
+        }
+      });
+    }
+
+    teamRankings = Array.from(teamRankingsMap.values()).sort((a, b) => {
+      // 점수 순으로 정렬, 같으면 팀 번호 순
+      if (b.totalScore !== a.totalScore) {
+        return b.totalScore - a.totalScore;
+      }
+      return a.teamNumber - b.teamNumber;
+    });
+
+    // 랭킹 재계산
+    teamRankings = teamRankings.map((team, index) => ({
+      ...team,
+      rank: index + 1,
+    }));
+
+    // 모든 팀의 멤버 정보 조회
+    const allTeamIds = Array.from(teamRankingsMap.keys());
+    if (allTeamIds.length > 0) {
+      const teamMembersResult = await executeSupabaseQuery(async () => {
+        return await supabase
+          .from("party_members")
+          .select(
+            `
+            team_id,
+            level,
+            users:user_id(id, nickname)
+          `,
+          )
+          .eq("party_id", partyId)
+          .in("team_id", allTeamIds);
+      });
+
+      if (teamMembersResult.success && teamMembersResult.data) {
+        const membersMap = new Map<string, Array<{ name: string; level: string }>>();
+        teamMembersResult.data.forEach((member: any) => {
+          if (!member.team_id) return;
+          if (!membersMap.has(member.team_id)) {
+            membersMap.set(member.team_id, []);
+          }
+          membersMap.get(member.team_id)?.push({
+            name: member.users?.nickname || "알 수 없음",
+            level: member.level || "White",
+          });
+        });
+
+        teamRankings = teamRankings.map((team) => ({
+          ...team,
+          members: team.teamId ? membersMap.get(team.teamId) || [] : [],
+        }));
+      }
     }
 
     // 파티 참가자 수 및 팀 수 계산
@@ -181,6 +269,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         timeRemaining,
         progress,
       },
+      partyStartAt: party.start_at,
+      partyEndAt: party.end_at,
       personal: personalRankings, // 전체 개인 랭킹 (Crux + Grip 합쳐서)
       crux: cruxRankings, // Crux 그룹 랭킹
       grip: gripRankings, // Grip 그룹 랭킹

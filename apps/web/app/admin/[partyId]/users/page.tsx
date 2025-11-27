@@ -20,6 +20,7 @@ type PartyMember = {
   checkin_status: string;
   checked_in_at: string | null;
   joined_at: string;
+  block_set_number: number | null;
   users: {
     id: string;
     nickname: string;
@@ -48,6 +49,7 @@ export default function UsersManagementPage() {
   const [editTeamId, setEditTeamId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<string>("participant");
   const [teams, setTeams] = useState<Array<{ id: string; name: string; color: string | null }>>([]);
+  const [editBlockSet, setEditBlockSet] = useState<number | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -93,11 +95,27 @@ export default function UsersManagementPage() {
     }
   };
 
+  const getAvailableBlockSets = (teamId: string | null, currentUserId: string) => {
+    if (!teamId) return [1, 2, 3, 4, 5];
+    const usedSets = new Set<number>();
+    members
+      .filter((member) => member.team_id === teamId && member.user_id !== currentUserId)
+      .forEach((member) => {
+        const assigned = member.block_set_number;
+        if (assigned !== undefined && assigned !== null) {
+          usedSets.add(assigned);
+        }
+      });
+
+    return [1, 2, 3, 4, 5].filter((num) => !usedSets.has(num));
+  };
+
   const handleEdit = (member: PartyMember) => {
     setEditingMember(member);
     setEditLevel(member.level);
     setEditTeamId(member.team_id);
     setEditRole(member.role);
+    setEditBlockSet(member.block_set_number ?? null);
   };
 
   const handleSave = async () => {
@@ -114,6 +132,7 @@ export default function UsersManagementPage() {
           level: editLevel,
           teamId: editTeamId,
           role: editRole,
+          blockSetNumber: editBlockSet,
         }),
       });
 
@@ -140,6 +159,7 @@ export default function UsersManagementPage() {
     setEditLevel(null);
     setEditTeamId(null);
     setEditRole("participant");
+    setEditBlockSet(null);
   };
 
   if (status === "loading" || loading) {
@@ -200,6 +220,7 @@ export default function UsersManagementPage() {
                         <th className="text-left p-3 font-semibold">레벨</th>
                         <th className="text-left p-3 font-semibold">팀</th>
                         <th className="text-left p-3 font-semibold">역할</th>
+                        <th className="text-left p-3 font-semibold">블럭 Set</th>
                         <th className="text-center p-3 font-semibold">작업</th>
                       </tr>
                     </thead>
@@ -226,6 +247,9 @@ export default function UsersManagementPage() {
                             )}
                           </td>
                           <td className="p-3">{member.role}</td>
+                          <td className="p-3">
+                            <span className="text-sm">{member.block_set_number ?? "미설정"}</span>
+                          </td>
                           <td className="p-3">
                             <Button
                               variant="outline"
@@ -289,7 +313,15 @@ export default function UsersManagementPage() {
                   <label className="text-sm font-medium">팀</label>
                   <select
                     value={editTeamId || ""}
-                    onChange={(e) => setEditTeamId(e.target.value || null)}
+                    onChange={(e) => {
+                      const value = e.target.value || null;
+                      setEditTeamId(value);
+                      if (!value) {
+                        setEditBlockSet(null);
+                      } else if (editingMember) {
+                        setEditBlockSet(editingMember.block_set_number ?? null);
+                      }
+                    }}
                     className="mt-2 w-full px-3 py-2 border rounded-md"
                   >
                     <option value="">팀 미배정</option>
@@ -311,6 +343,42 @@ export default function UsersManagementPage() {
                     <option value="staff">스탭</option>
                     <option value="admin">관리자</option>
                   </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">블럭 Set</label>
+                  {editTeamId && editingMember ? (
+                    <>
+                      <select
+                        value={editBlockSet ?? ""}
+                        onChange={(e) =>
+                          setEditBlockSet(e.target.value ? parseInt(e.target.value, 10) : null)
+                        }
+                        className="mt-2 w-full px-3 py-2 border rounded-md"
+                      >
+                        <option value="">미설정</option>
+                        {[1, 2, 3, 4, 5].map((num) => {
+                          const availableBlockSetsForCurrent = getAvailableBlockSets(
+                            editTeamId,
+                            editingMember.user_id,
+                          );
+                          const isAvailable =
+                            availableBlockSetsForCurrent.includes(num) || editBlockSet === num;
+                          return (
+                            <option key={num} value={num} disabled={!isAvailable}>
+                              Set {num} {!isAvailable ? "(사용 중)" : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        같은 팀 내에서는 중복된 Set을 사용할 수 없습니다.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      팀 배정 후 블럭 Set을 설정할 수 있습니다.
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button variant="primary" onClick={handleSave} className="flex-1">

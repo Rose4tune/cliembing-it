@@ -117,6 +117,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
           ...item,
           rank: index + 1,
         }));
+
+      // 챌린지 랭킹이 없으면 모든 팀을 기본 리스트로 생성
+      if (challengeRankings.length === 0 && teamsResult.data.length > 0) {
+        challengeRankings.push(
+          ...teamsResult.data.map((team: { id: string; name: string }, index: number) => ({
+            teamId: team.id,
+            teamName: team.name,
+            rank: index + 1,
+            time: "--:--",
+          })),
+        );
+      }
     }
 
     // Crux, Grip 랭킹을 관리자용 형식으로 변환

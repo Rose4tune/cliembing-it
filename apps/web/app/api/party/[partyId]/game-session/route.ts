@@ -51,17 +51,49 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     // 파티 admin 역할과는 별개 (애플리케이션 레벨 권한)
     const supabase = createAdminClient();
 
-    // 권한 확인: 애플리케이션 레벨에서 팀 멤버인지 확인 (Admin 클라이언트로)
-    const teamMemberCheck = await supabase
-      .from("team_members")
-      .select("team_id, user_id")
-      .eq("team_id", teamId)
-      .eq("user_id", session.user.id)
-      .maybeSingle();
+    // 관리자 권한 확인
+    const userId = (session.user as { id?: string })?.id;
+    if (!userId) {
+      return errorResponse("사용자 ID를 찾을 수 없습니다", 400);
+    }
 
-    if (!teamMemberCheck.data) {
-      // 팀 멤버가 아니면 접근 거부
-      return errorResponse("해당 팀의 멤버만 게임 세션에 접근할 수 있습니다", 403);
+    const userRole = (session.user as { role?: string | null })?.role;
+    const isAdmin = userRole === "admin";
+
+    // 관리자가 아닌 경우에만 팀 멤버 확인
+    if (!isAdmin) {
+      // 파티 관리자 권한 확인 (파티 생성자 또는 스탭/관리자)
+      const { data: partyMember } = await supabase
+        .from("party_members")
+        .select("role")
+        .eq("party_id", partyId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const { data: party } = await supabase
+        .from("parties")
+        .select("created_by")
+        .eq("id", partyId)
+        .maybeSingle();
+
+      const isPartyCreator = party?.created_by === userId;
+      const isStaff = partyMember?.role === "staff" || partyMember?.role === "admin";
+      const canAccessAdminView = isAdmin || isStaff || isPartyCreator;
+
+      // 관리자 권한이 없으면 팀 멤버인지 확인
+      if (!canAccessAdminView) {
+        const teamMemberCheck = await supabase
+          .from("team_members")
+          .select("team_id, user_id")
+          .eq("team_id", teamId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!teamMemberCheck.data) {
+          // 팀 멤버가 아니면 접근 거부
+          return errorResponse("해당 팀의 멤버만 게임 세션에 접근할 수 있습니다", 403);
+        }
+      }
     }
 
     // 모든 게임 세션 조회 (상태 우선순위로 선택)

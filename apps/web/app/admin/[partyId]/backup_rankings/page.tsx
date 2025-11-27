@@ -43,6 +43,7 @@ export default function RankingsPage() {
   const [challengeRankings, setChallengeRankings] = useState<ChallengeRanking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"crux" | "grip" | "team" | "challenge">("crux");
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -115,16 +116,59 @@ export default function RankingsPage() {
     <div className="flex min-h-screen flex-col ml-20">
       <Header variant="login" title="전체 랭킹" />
 
-      <main className="flex-1 container max-w-full mx-auto px-4 py-8 pb-6">
-        {/* 4개 랭킹을 가로로 나열 */}
-        <div className="flex gap-4 overflow-x-auto">
-          {/* Crux 랭킹 */}
-          <Card className="flex-shrink-0 w-80">
+      <main className="flex-1 container max-w-4xl mx-auto px-4 py-8 space-y-6 pb-6">
+        {/* 탭 */}
+        <div className="flex gap-2 border-b">
+          <button
+            onClick={() => setActiveTab("crux")}
+            className={`px-4 py-2 font-medium ${
+              activeTab === "crux"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            <Trophy className="h-4 w-4 inline mr-2" />
+            Crux 랭킹
+          </button>
+          <button
+            onClick={() => setActiveTab("grip")}
+            className={`px-4 py-2 font-medium ${
+              activeTab === "grip"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            <Trophy className="h-4 w-4 inline mr-2" />
+            Grip 랭킹
+          </button>
+          <button
+            onClick={() => setActiveTab("team")}
+            className={`px-4 py-2 font-medium ${
+              activeTab === "team"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            <Users className="h-4 w-4 inline mr-2" />팀 랭킹
+          </button>
+          <button
+            onClick={() => setActiveTab("challenge")}
+            className={`px-4 py-2 font-medium ${
+              activeTab === "challenge"
+                ? "border-b-2 border-primary text-primary"
+                : "text-muted-foreground"
+            }`}
+          >
+            <Target className="h-4 w-4 inline mr-2" />
+            챌린지 랭킹
+          </button>
+        </div>
+
+        {/* Crux 랭킹 */}
+        {activeTab === "crux" && (
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5" />
-                Crux 랭킹
-              </CardTitle>
+              <CardTitle>Crux 랭킹</CardTitle>
             </CardHeader>
             <CardContent>
               {cruxRankings.length === 0 ? (
@@ -132,15 +176,15 @@ export default function RankingsPage() {
                   Crux 그룹 랭킹 데이터가 없습니다.
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                <div className="space-y-2">
                   {cruxRankings.map((ranking) => (
                     <div
                       key={ranking.user.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-4 border rounded-lg"
                     >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="flex items-center gap-4">
                         <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
                             ranking.rank === 1
                               ? "bg-yellow-500 text-white"
                               : ranking.rank === 2
@@ -152,29 +196,24 @@ export default function RankingsPage() {
                         >
                           {ranking.rank}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-sm truncate">
-                            {ranking.user.nickname}
-                          </div>
+                        <div>
+                          <div className="font-semibold">{ranking.user.nickname}</div>
                         </div>
                       </div>
-                      <div className="text-sm font-bold flex-shrink-0 ml-2">
-                        {ranking.totalScore}점
-                      </div>
+                      <div className="text-lg font-bold">{ranking.totalScore}점</div>
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+        )}
 
-          {/* Grip 랭킹 */}
-          <Card className="flex-shrink-0 w-80">
+        {/* Grip 랭킹 */}
+        {activeTab === "grip" && (
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5" />
-                Grip 랭킹
-              </CardTitle>
+              <CardTitle>Grip 랭킹</CardTitle>
             </CardHeader>
             <CardContent>
               {gripRankings.length === 0 ? (
@@ -182,15 +221,15 @@ export default function RankingsPage() {
                   Grip 그룹 랭킹 데이터가 없습니다.
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                <div className="space-y-2">
                   {gripRankings.map((ranking) => (
                     <div
                       key={ranking.user.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-4 border rounded-lg"
                     >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="flex items-center gap-4">
                         <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
                             ranking.rank === 1
                               ? "bg-yellow-500 text-white"
                               : ranking.rank === 2
@@ -202,28 +241,24 @@ export default function RankingsPage() {
                         >
                           {ranking.rank}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-sm truncate">
-                            {ranking.user.nickname}
-                          </div>
+                        <div>
+                          <div className="font-semibold">{ranking.user.nickname}</div>
                         </div>
                       </div>
-                      <div className="text-sm font-bold flex-shrink-0 ml-2">
-                        {ranking.totalScore}점
-                      </div>
+                      <div className="text-lg font-bold">{ranking.totalScore}점</div>
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+        )}
 
-          {/* 팀 랭킹 */}
-          <Card className="flex-shrink-0 w-80">
+        {/* 팀 랭킹 */}
+        {activeTab === "team" && (
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />팀 랭킹
-              </CardTitle>
+              <CardTitle>팀 랭킹</CardTitle>
             </CardHeader>
             <CardContent>
               {teamRankings.length === 0 ? (
@@ -231,15 +266,15 @@ export default function RankingsPage() {
                   팀 랭킹 데이터가 없습니다.
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                <div className="space-y-2">
                   {teamRankings.map((ranking) => (
                     <div
                       key={ranking.teamId}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-4 border rounded-lg"
                     >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="flex items-center gap-4">
                         <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
                             ranking.rank === 1
                               ? "bg-yellow-500 text-white"
                               : ranking.rank === 2
@@ -251,27 +286,22 @@ export default function RankingsPage() {
                         >
                           {ranking.rank}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-sm truncate">{ranking.teamName}</div>
-                        </div>
+                        <div className="font-semibold">{ranking.teamName}</div>
                       </div>
-                      <div className="text-sm font-bold flex-shrink-0 ml-2">
-                        {ranking.totalScore}점
-                      </div>
+                      <div className="text-lg font-bold">{ranking.totalScore}점</div>
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+        )}
 
-          {/* 챌린지 랭킹 */}
-          <Card className="flex-shrink-0 w-80">
+        {/* 챌린지 랭킹 */}
+        {activeTab === "challenge" && (
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                챌린지 랭킹
-              </CardTitle>
+              <CardTitle>챌린지 랭킹</CardTitle>
             </CardHeader>
             <CardContent>
               {challengeRankings.length === 0 ? (
@@ -279,15 +309,15 @@ export default function RankingsPage() {
                   챌린지 기록이 없습니다.
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                <div className="space-y-2">
                   {challengeRankings.map((ranking) => (
                     <div
                       key={ranking.teamId}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-4 border rounded-lg"
                     >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="flex items-center gap-4">
                         <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
                             ranking.rank === 1
                               ? "bg-yellow-500 text-white"
                               : ranking.rank === 2
@@ -299,20 +329,16 @@ export default function RankingsPage() {
                         >
                           {ranking.rank}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-sm truncate">{ranking.teamName}</div>
-                        </div>
+                        <div className="font-semibold">{ranking.teamName}</div>
                       </div>
-                      <div className="text-sm font-bold flex-shrink-0 ml-2">
-                        {ranking.time || "--:--"}
-                      </div>
+                      <div className="text-lg font-bold">{ranking.time || "--:--"}</div>
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
-        </div>
+        )}
       </main>
 
       <AdminSidebar />

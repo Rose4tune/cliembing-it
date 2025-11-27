@@ -11,6 +11,8 @@ import { cn } from "@pkg/ui-web/lib/utils";
 import { PARTY_STATUS_LABELS, PARTY_STATUS_COLORS, type PartyStatus } from "@pkg/shared";
 import type { Party } from "@pkg/shared";
 import { createClient } from "@pkg/supabase/client";
+import { TeamRanking } from "../../components/Tetris/TeamRanking";
+import { useCountdownTimer } from "../../hooks/useCountdownTimer";
 
 type TabType = "group" | "team" | "challenge";
 type SubTabType = "crux" | "grip";
@@ -34,9 +36,9 @@ export default function RankboardPage() {
       status: string;
       participants: number;
       teams: number;
-      timeRemaining: string | null;
-      progress: number;
     };
+    partyStartAt?: string | null;
+    partyEndAt?: string | null;
     crux?: Array<{
       rank: number;
       userId: string;
@@ -55,18 +57,24 @@ export default function RankboardPage() {
     }>;
     team: Array<{
       rank: number;
-      teamId: string;
-      teamName: string;
+      teamId?: string;
+      teamName?: string;
       totalScore: number;
+      usedPieces: number;
+      totalPieces: number;
+      completedLines: number;
+      members?: Array<{ name: string; level: string }>;
     }>;
     challenge: Array<{
       rank?: number;
+      teamId?: string;
       teamName?: string;
       attempts?: number;
       failures?: number;
       time?: string;
     }>;
   } | null>(null);
+  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
 
   // 랭킹 데이터 조회 함수 (Realtime에서도 사용)
   const fetchRankingData = useCallback(async () => {
@@ -79,7 +87,7 @@ export default function RankboardPage() {
       const memberResponse = await fetch(`/api/party/${partyId}/member`);
       if (memberResponse.ok) {
         const memberResult = await memberResponse.json();
-        if (memberResult.success && memberResult.data?.level) {
+        if (memberResult.success && memberResult.data) {
           const level = memberResult.data.level;
           // Crux 그룹: White, Hite
           // Grip 그룹: Blue, Navy, Purple
@@ -90,6 +98,7 @@ export default function RankboardPage() {
             setUserGroup("grip");
             setActiveSubTab("grip");
           }
+          setCurrentTeamId(memberResult.data.team_id || null);
         }
       }
 
@@ -107,8 +116,8 @@ export default function RankboardPage() {
             status: result.data.party.status as PartyStatus,
             total_participants: result.data.party.participants,
             total_teams: result.data.party.teams,
-            start_at: null,
-            end_at: null,
+            start_at: result.data.partyStartAt || null,
+            end_at: result.data.partyEndAt || null,
           } as Party);
         }
       } else {
@@ -233,6 +242,15 @@ export default function RankboardPage() {
     checkAccess();
   }, [party, partyId, router]);
 
+  // Hooks must be called before any conditional returns
+  const sessionUserId = (session?.user as { id?: string | null })?.id || null;
+  const { time: countdownTime, progress: countdownProgress } = useCountdownTimer(
+    rankingData?.partyEndAt ?? party?.end_at ?? null,
+    {
+      startTime: rankingData?.partyStartAt ?? party?.start_at ?? null,
+    },
+  );
+
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
     if (rank === 2) return <Trophy className="w-5 h-5 text-gray-500" />;
@@ -287,6 +305,17 @@ export default function RankboardPage() {
   const currentGroupRankings = activeSubTab === "crux" ? cruxRankings : gripRankings;
   const teamRankings = rankingData.team || [];
   const challengeRankings = rankingData.challenge || [];
+  const challengeList =
+    challengeRankings.length > 0
+      ? challengeRankings
+      : teamRankings.map((team) => ({
+          rank: team.rank,
+          teamId: team.teamId,
+          teamName: team.teamName || `${team.teamNumber}조`,
+          attempts: 0,
+          failures: 0,
+          time: "--:--",
+        }));
   const partyInfo = rankingData.party;
 
   return (
@@ -330,17 +359,17 @@ export default function RankboardPage() {
                 <p className="font-semibold">{partyInfo.teams}개</p>
               </div>
             </div>
-            {partyInfo.timeRemaining && (
+            {rankingData.partyEndAt && (
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-muted-foreground">남은 시간</span>
-                  <span className="font-semibold">{partyInfo.timeRemaining}</span>
+                  <span className="font-semibold">{countdownTime}</span>
                 </div>
                 <div className="w-full bg-secondary rounded-full h-2">
                   <div
                     className="bg-primary h-2 rounded-full transition-all"
                     style={{
-                      width: `${partyInfo.progress}%`,
+                      width: `${countdownProgress}%`,
                     }}
                   />
                 </div>
@@ -425,7 +454,13 @@ export default function RankboardPage() {
                     </div>
                   ) : (
                     currentGroupRankings.map((item) => (
-                      <Card key={item.userId} className="p-4">
+                      <Card
+                        key={item.userId}
+                        className={cn(
+                          "p-4 border transition-all",
+                          sessionUserId === item.userId ? "border-primary" : "",
+                        )}
+                      >
                         <CardContent>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 flex-1">
@@ -451,67 +486,50 @@ export default function RankboardPage() {
           )}
 
           {activeTab === "team" && (
-            <div className="space-y-4">
-              <p className="text-gray-400 text-right">Total score</p>
-              <div className="space-y-2">
+            <Card>
+              <CardContent className="pt-6">
                 {teamRankings.length === 0 ? (
                   <div className="text-center text-muted-foreground py-8">
                     팀 랭킹 데이터가 없습니다.
                   </div>
                 ) : (
-                  teamRankings.map((item) => (
-                    <Card key={item.teamId} className="p-4">
-                      <CardContent>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3 flex-1">
-                            <div className="w-6 flex justify-center">{getRankIcon(item.rank)}</div>
-                            <div className="flex-1">
-                              <p className="font-semibold">{item.teamName}</p>
-                            </div>
-                          </div>
-                          <span className="text-sm font-semibold">{item.totalScore} 점</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                  <TeamRanking teams={teamRankings} highlightTeamId={currentTeamId} />
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
           {activeTab === "challenge" && (
             <div className="space-y-4">
               <p className="text-gray-400 text-right">Taken Time</p>
               <div className="space-y-2">
-                {challengeRankings.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    챌린지 데이터가 없습니다.
-                  </div>
-                ) : (
-                  challengeRankings.map((item, index) => (
-                    <Card key={index} className="p-4">
-                      <CardContent>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3 flex-1">
-                            <div className="w-6 flex justify-center">
-                              {getRankIcon(item.rank || index + 1)}
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-semibold">{item.teamName || "팀 정보 없음"}</p>
-                              <div className="text-xs text-muted-foreground space-y-0.5">
-                                {item.attempts !== undefined && (
-                                  <p>도전 가능 횟수: {item.attempts}</p>
-                                )}
-                                {item.failures !== undefined && <p>실패 횟수: {item.failures}</p>}
-                              </div>
+                {challengeList.map((item, index) => (
+                  <Card
+                    key={`${item.teamId || index}-${index}`}
+                    className={cn(
+                      "p-4 border transition-all",
+                      currentTeamId && item.teamId === currentTeamId ? "border-primary" : "",
+                    )}
+                  >
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="w-6 flex justify-center">
+                            {getRankIcon(item.rank || index + 1)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold">{item.teamName || "팀 정보 없음"}</p>
+                            <div className="text-xs text-muted-foreground space-y-0.5">
+                              <p>도전 가능 횟수: {item.attempts ?? 0}</p>
+                              <p>실패 횟수: {item.failures ?? 0}</p>
                             </div>
                           </div>
-                          {item.time && <span className="text-sm font-semibold">{item.time}</span>}
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
+                        <span className="text-sm font-semibold">{item.time || "--:--"}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </div>
           )}

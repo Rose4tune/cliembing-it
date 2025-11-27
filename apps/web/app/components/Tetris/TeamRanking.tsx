@@ -13,6 +13,8 @@ interface TeamMember {
 interface TeamRankingItem {
   rank: number;
   teamNumber: number;
+  teamId?: string;
+  teamName?: string;
   totalScore: number;
   completedLines: number;
   usedPieces: number;
@@ -22,6 +24,9 @@ interface TeamRankingItem {
 
 interface TeamRankingProps {
   teams: TeamRankingItem[];
+  highlightTeamId?: string | null;
+  allowToggle?: boolean;
+  className?: string;
 }
 
 const getRankIcon = (rank: number) => {
@@ -47,10 +52,16 @@ const getLevelColor = (level: string): string => {
   return colorMap[level] || "bg-gray-200 text-gray-700";
 };
 
-export function TeamRanking({ teams }: TeamRankingProps) {
+export function TeamRanking({
+  teams,
+  highlightTeamId,
+  allowToggle = true,
+  className,
+}: TeamRankingProps) {
   const [expandedTeams, setExpandedTeams] = useState<Set<number>>(new Set());
 
   const toggleTeam = (teamNumber: number) => {
+    if (!allowToggle) return;
     setExpandedTeams((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(teamNumber)) {
@@ -63,7 +74,7 @@ export function TeamRanking({ teams }: TeamRankingProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-4", className)}>
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">실시간 팀 랭킹</h2>
         <span className="text-sm text-muted-foreground">Total Score</span>
@@ -75,9 +86,18 @@ export function TeamRanking({ teams }: TeamRankingProps) {
           const showMembers = hasMembers && isExpanded;
 
           return (
-            <Card key={team.rank} className="gap-0">
+            <Card
+              key={`${team.teamId ?? team.teamNumber}-${team.rank}`}
+              className={cn(
+                "gap-0 border transition-all",
+                highlightTeamId && team.teamId === highlightTeamId ? "border-primary" : "",
+              )}
+            >
               <CardContent
-                className={cn("cursor-pointer", hasMembers && "hover:opacity-70")}
+                className={cn(
+                  allowToggle && hasMembers ? "cursor-pointer" : "",
+                  allowToggle && hasMembers ? "hover:opacity-70" : "",
+                )}
                 onClick={() => hasMembers && toggleTeam(team.teamNumber)}
               >
                 <div className="flex items-center justify-between">
@@ -85,8 +105,10 @@ export function TeamRanking({ teams }: TeamRankingProps) {
                     <div className="w-6 flex justify-center shrink-0">{getRankIcon(team.rank)}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold truncate">{team.teamNumber}조</p>
-                        {hasMembers && (
+                        <p className="font-semibold truncate">
+                          {team.teamName || `${team.teamNumber}조`}
+                        </p>
+                        {allowToggle && hasMembers && (
                           <>
                             {isExpanded ? (
                               <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -112,7 +134,7 @@ export function TeamRanking({ teams }: TeamRankingProps) {
                   <div className="flex flex-wrap gap-1 animate-in fade-in slide-in-from-top-2 duration-200 border-muted border-t w-full mt-3 pt-3">
                     {team.members?.map((member, idx) => (
                       <span
-                        key={idx}
+                        key={`${team.teamId}-${idx}-${member.name}`}
                         className={cn(
                           "text-xs px-2 py-0.5 rounded-full",
                           getLevelColor(member.level),

@@ -19,6 +19,7 @@ import {
   type LevelPointsConfig,
 } from "@pkg/shared";
 import type { Party } from "@pkg/shared";
+import { useCountdownTimer } from "../../../hooks/useCountdownTimer";
 
 type LevelColor =
   | "red"
@@ -105,6 +106,18 @@ export default function ScoreInputPage() {
     white: 0,
     black: 0,
   });
+  const [pendingScores, setPendingScores] = useState<Record<LevelColor, number>>({
+    red: 0,
+    orange: 0,
+    yellow: 0,
+    green: 0,
+    blue: 0,
+    navy: 0,
+    purple: 0,
+    hite: 0,
+    white: 0,
+    black: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [party, setParty] = useState<Party | null>(null);
@@ -113,6 +126,7 @@ export default function ScoreInputPage() {
   const [error, setError] = useState<string | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [approvedTotalScore, setApprovedTotalScore] = useState(0);
+  const [pendingTotalScore, setPendingTotalScore] = useState(0);
   const [levelPointsConfig, setLevelPointsConfig] = useState<LevelPointsConfig | null>(null);
 
   // 파티 정보 및 사용자 정보 조회
@@ -146,8 +160,21 @@ export default function ScoreInputPage() {
             white: 0,
             black: 0,
           };
+          const pendingCounts: Record<LevelColor, number> = {
+            red: 0,
+            orange: 0,
+            yellow: 0,
+            green: 0,
+            blue: 0,
+            navy: 0,
+            purple: 0,
+            hite: 0,
+            white: 0,
+            black: 0,
+          };
 
           let approvedScore = 0;
+          let pendingScore = 0;
           // 승인된 레코드의 problem_count를 합산
           // (같은 레벨에 여러 승인된 레코드가 있을 수 있음)
           (scoresResult.data.scores || []).forEach(
@@ -162,17 +189,22 @@ export default function ScoreInputPage() {
                 // 승인된 레코드만 합산
                 if (score.approved === true) {
                   approvedCounts[color] = (approvedCounts[color] || 0) + score.problem_count;
+                } else if (score.approved === null) {
+                  pendingCounts[color] = (pendingCounts[color] || 0) + score.problem_count;
                 }
               }
               // 승인된 점수만 합산
               if (score.approved === true) {
                 approvedScore += score.score || 0;
+              } else if (score.approved === null) {
+                pendingScore += score.score || 0;
               }
             },
           );
 
           // 승인된 총 개수는 별도 state로 저장
           setApprovedScores(approvedCounts);
+          setPendingScores(pendingCounts);
           // 승인 요청할 개수는 항상 0으로 시작 (입력 필드 초기값)
           setScores({
             red: 0,
@@ -187,6 +219,7 @@ export default function ScoreInputPage() {
             black: 0,
           });
           setApprovedTotalScore(approvedScore);
+          setPendingTotalScore(pendingScore);
         }
 
         // 사용자 파티 멤버 정보 조회 (레벨, 팀)
@@ -328,28 +361,9 @@ export default function ScoreInputPage() {
     }
   };
 
-  // 남은 시간 계산
-  const timeRemaining = useMemo(() => {
-    if (!party?.end_at) return "00:00:00";
-    const endTime = new Date(party.end_at).getTime();
-    const now = Date.now();
-    const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-    const hours = Math.floor(remaining / 3600);
-    const minutes = Math.floor((remaining % 3600) / 60);
-    const seconds = remaining % 60;
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  }, [party?.end_at]);
-
-  // 진행률 계산
-  const progress = useMemo(() => {
-    if (!party?.start_at || !party?.end_at) return 0;
-    const startTime = new Date(party.start_at).getTime();
-    const endTime = new Date(party.end_at).getTime();
-    const now = Date.now();
-    const total = endTime - startTime;
-    const elapsed = now - startTime;
-    return Math.min(100, Math.max(0, Math.floor((elapsed / total) * 100)));
-  }, [party?.start_at, party?.end_at]);
+  const { time: timeRemaining, progress } = useCountdownTimer(party?.end_at ?? null, {
+    startTime: party?.start_at ?? null,
+  });
 
   if (loading) {
     return (
@@ -493,6 +507,10 @@ export default function ScoreInputPage() {
                 <span className="font-semibold">요청 할 점수</span>
                 <span className="text-xl font-bold text-primary">{totalScore}점</span>
               </div>
+            </div>
+            <div className="flex items-center justify-between text-sm border-t pt-3">
+              <span className="text-muted-foreground">대기중인 점수</span>
+              <span className="font-semibold text-orange-600">{pendingTotalScore}점</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">승인된 점수</span>

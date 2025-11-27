@@ -89,6 +89,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       });
     }
 
+    const blockSetResult = await executeSupabaseQuery(async () => {
+      return await supabase
+        .from("party_member_block_sets")
+        .select("user_id, set_number")
+        .eq("party_id", partyId);
+    });
+
+    const blockSetMap = new Map<string, number>();
+    if (blockSetResult.success && blockSetResult.data) {
+      blockSetResult.data.forEach((item: any) => {
+        blockSetMap.set(item.user_id, item.set_number);
+      });
+    }
+
     const membersWithUsers = membersResult.data.map((member: any) => ({
       ...member,
       users: usersMap.get(member.user_id) || {
@@ -110,6 +124,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
               : null;
           })()
         : null,
+      block_set_number: blockSetMap.get(member.user_id) ?? null,
     }));
 
     return successResponse(membersWithUsers);
@@ -140,7 +155,7 @@ export async function PATCH(
 
     const { partyId } = await params;
     const body = await request.json();
-    const { memberId, level, teamId, role } = body;
+    const { memberId, level, teamId, role, blockSetNumber } = body;
 
     if (!memberId) {
       return errorResponse("멤버 ID가 필요합니다", 400);
@@ -295,6 +310,71 @@ export async function PATCH(
           console.error("team_members 생성 실패:", insertResult.error);
           // 생성 실패해도 party_members는 이미 업데이트되었으므로 계속 진행
         }
+      }
+    }
+
+    const targetTeamId = teamId !== undefined ? teamId : existingTeamId;
+
+    if (blockSetNumber !== undefined) {
+      if (!targetTeamId && blockSetNumber !== null) {
+        return errorResponse("팀이 배정된 경우에만 블럭 Set을 설정할 수 있습니다", 400);
+      }
+
+      if (blockSetNumber === null) {
+        await executeSupabaseQuery(async () => {
+          return await supabase
+            .from("party_member_block_sets")
+            .delete()
+            .eq("party_id", partyId)
+            .eq("user_id", userId);
+        });
+      } else {
+        if (blockSetNumber < 1 || blockSetNumber > 5) {
+          return errorResponse("블럭 Set 번호는 1~5 사이여야 합니다", 400);
+        }
+
+        let conflictExists = false;
+        if (targetTeamId) {
+          const teammatesResult = await executeSupabaseQuery(async () => {
+            return await supabase
+              .from("party_members")
+              .select("user_id")
+              .eq("party_id", partyId)
+              .eq("team_id", targetTeamId)
+              .neq("user_id", userId);
+          });
+
+          if (teammatesResult.success && teammatesResult.data && teammatesResult.data.length > 0) {
+            const teammateIds = teammatesResult.data.map((m: any) => m.user_id);
+            const conflictResult = await executeSupabaseQuery(async () => {
+              return await supabase
+                .from("party_member_block_sets")
+                .select("user_id")
+                .eq("party_id", partyId)
+                .eq("set_number", blockSetNumber)
+                .in("user_id", teammateIds);
+            });
+
+            if (conflictResult.success && conflictResult.data && conflictResult.data.length > 0) {
+              conflictExists = true;
+            }
+          }
+        }
+
+        if (conflictExists) {
+          return errorResponse("이미 다른 팀원이 사용중인 블럭 Set 입니다", 400);
+        }
+
+        await executeSupabaseQuery(async () => {
+          return await supabase.from("party_member_block_sets").upsert(
+            {
+              party_id: partyId,
+              user_id: userId,
+              set_number: blockSetNumber,
+            },
+            { onConflict: "party_id,user_id" },
+          );
+        });
       }
     }
 

@@ -28,6 +28,7 @@ import {
 } from "@pkg/shared";
 import { calculateScore as calculateTetrisScore } from "@pkg/shared/services/tetris-game-service";
 import { createClient } from "@pkg/supabase/client";
+import { useCountdownTimer } from "../../../../hooks/useCountdownTimer";
 import {
   type BlockColor,
   type GameState,
@@ -52,7 +53,6 @@ export default function TetrisPage() {
   const [dbGameStatus, setDbGameStatus] = useState<string | null>(null); // DB의 실제 상태 저장 (idle vs inactive 구분용)
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showGameRules, setShowGameRules] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState("01:05:12");
   const [teamTotalScore, setTeamTotalScore] = useState(0);
   const [completedLines, setCompletedLines] = useState(0);
   const [remainingPieces, setRemainingPieces] = useState<BlockPiece[]>([]);
@@ -73,7 +73,18 @@ export default function TetrisPage() {
   const [userTeam, setUserTeam] = useState<string>("");
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [isLeader, setIsLeader] = useState<boolean>(false);
-  const [teamRankings, setTeamRankings] = useState<any[]>([]);
+  type TeamRankingData = {
+    rank: number;
+    teamNumber: number;
+    teamId?: string;
+    teamName?: string;
+    totalScore: number;
+    usedPieces: number;
+    totalPieces: number;
+    completedLines: number;
+    members?: Array<{ name: string; level: string }>;
+  };
+  const [teamRankings, setTeamRankings] = useState<TeamRankingData[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // 획득 조각 = 대기 중인 사용 안한 블럭의 수
@@ -468,26 +479,9 @@ export default function TetrisPage() {
     };
   }, [partyId, teamId]);
 
-  // 남은 시간 계산
-  useEffect(() => {
-    if (!party?.end_at) return;
-
-    const updateTime = () => {
-      const endTime = new Date(party.end_at!).getTime();
-      const now = Date.now();
-      const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-      const hours = Math.floor(remaining / 3600);
-      const minutes = Math.floor((remaining % 3600) / 60);
-      const seconds = remaining % 60;
-      setTimeRemaining(
-        `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`,
-      );
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, [party?.end_at]);
+  const { time: countdownTime } = useCountdownTimer(party?.end_at ?? null, {
+    startTime: party?.start_at ?? null,
+  });
 
   // 게임 시작 요청
   const handleRequestGameStart = async () => {
@@ -788,7 +782,9 @@ export default function TetrisPage() {
         // 3. 점수 계산 및 업데이트
         // 라인 완성 시점 또는 게임 일단락 시점에 점수 계산
         const newScore = calculateTetrisScore(newBoard);
-        setTeamTotalScore(newScore);
+        if (linesCompleted) {
+          setTeamTotalScore(newScore);
+        }
 
         // 4. 최고 높이 계산 (특수 블럭 보상 여부 판별)
         const currentHeight = calculateHighestHeight(newBoard);
@@ -1608,11 +1604,18 @@ export default function TetrisPage() {
           teamTotalScore={teamTotalScore}
           completedLines={completedLines}
           acquiredPieces={acquiredPieces}
-          timeRemaining={gameState === "running" ? timeRemaining : undefined}
+          timeRemaining={countdownTime}
         />
 
-        {/* 실시간 팀 랭킹 */}
-        <TeamRanking teams={teamRankings.length > 0 ? teamRankings : []} />
+        {/* 팀 정보 리스트 */}
+        <Card>
+          <CardContent className="pt-6">
+            <TeamRanking
+              teams={teamRankings.length > 0 ? teamRankings : []}
+              highlightTeamId={userTeamId}
+            />
+          </CardContent>
+        </Card>
       </main>
 
       <RankboardFooterNavigation partyId={partyId} />

@@ -2,7 +2,7 @@
 
 import { usePathname, useParams } from "next/navigation";
 import Link from "next/link";
-import { Settings, Users, User, CheckCircle, Trophy, Clock, Home, Blocks } from "lucide-react";
+import { Settings, Users, User, CheckCircle, Trophy, Clock, Home } from "lucide-react";
 import { cn } from "@pkg/ui-web/lib/utils";
 
 type NavItem = {
@@ -38,11 +38,6 @@ export function AdminSidebar() {
       href: `/admin/${partyId}/approvals`,
       label: "승인 관리",
       icon: CheckCircle,
-    },
-    {
-      href: `/admin/${partyId}/block-sets`,
-      label: "블럭 Set",
-      icon: Blocks,
     },
     {
       href: `/admin/${partyId}/rankings`,
