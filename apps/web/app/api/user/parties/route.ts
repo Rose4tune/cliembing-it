@@ -92,12 +92,12 @@ export async function GET() {
     }
 
     // 5. 각 파티별 참가자 수 조회 및 사용자 팀 정보 추가
-    // team_id가 있으면 teams 테이블에서 team 정보 조회
+    // team_id가 있으면 teams 테이블에서 team 정보 조회 (Service Role Key 사용)
     const teamIds = members.map((m: any) => m.team_id).filter((id: any) => id != null);
 
     const teamMap = new Map();
     if (teamIds.length > 0) {
-      const { data: teams, error: teamsError } = await supabase
+      const { data: teams, error: teamsError } = await supabaseForQuery
         .from("teams")
         .select("id, name")
         .in("id", teamIds);

@@ -71,16 +71,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
 
     const memberData = result.data as { team_id: string | null; [key: string]: any };
 
-    // team_id가 있으면 teams 테이블에서 팀 이름 및 팀장 정보 조회
+    // team_id가 있으면 teams 테이블에서 팀 이름 및 팀장 정보 조회 (Service Role Key 사용)
     let teamName = null;
     let isLeader = false;
     if (memberData.team_id) {
       const teamResult = await executeSupabaseQuery(async () => {
-        return await supabase
+        return await supabaseForQuery
           .from("teams")
           .select("name, leader_id")
           .eq("id", memberData.team_id!)
-          .single();
+          .maybeSingle();
       });
 
       if (teamResult.success && teamResult.data) {
