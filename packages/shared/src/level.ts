@@ -147,12 +147,14 @@ export function calculateScore(
  */
 export function getLevelAbove(level: ClimbingLevel): ClimbingLevel | null {
   const currentOrder = LEVEL_ORDER[level];
-  // Hite는 특수 처리 (Purple → White, White는 한 단계 위가 없음)
-  if (level === "White") {
-    return null; // White가 최상위
-  }
+  // Hite는 특수 처리 (Purple → White)
   if (level === "Hite") {
     return "White"; // Hite → White
+  }
+
+  // White 다음은 Black
+  if (level === "White") {
+    return "Black"; // White → Black
   }
 
   // 일반적인 경우: 순서상 다음 레벨
@@ -180,6 +182,11 @@ export function isScoreEligible(
   userBaseLevel: ClimbingLevel | null,
 ): boolean {
   if (!userBaseLevel) return false;
+
+  // Hite 레벨 사용자 특수 처리: Purple과 White 입력 가능
+  if (userBaseLevel === "Hite") {
+    return solvedLevel === "Purple" || solvedLevel === "White";
+  }
 
   // 본인 레벨이면 인정
   if (solvedLevel === userBaseLevel) return true;
