@@ -22,10 +22,17 @@ export async function POST(request: Request) {
     }
 
     // 2. 요청 데이터 파싱
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error("요청 본문 파싱 에러:", parseError);
+      return errorResponse("잘못된 요청 형식입니다", 400);
+    }
+
     const { code, level } = body;
 
-    if (!code) {
+    if (!code || typeof code !== "string") {
       return errorResponse("파티 코드가 필요합니다", 400);
     }
 
@@ -39,17 +46,45 @@ export async function POST(request: Request) {
         supabase = await createServerClient();
       }
     } catch (error) {
-      supabase = await createServerClient();
+      console.error("Supabase 클라이언트 생성 에러:", error);
+      try {
+        supabase = await createServerClient();
+      } catch (fallbackError) {
+        console.error("Supabase 클라이언트 생성 실패:", fallbackError);
+        return errorResponse("데이터베이스 연결에 실패했습니다", 500);
+      }
+    }
+
+    if (!supabase) {
+      return errorResponse("데이터베이스 연결에 실패했습니다", 500);
     }
 
     // 4. 파티 코드로 파티 조회
+    const trimmedCode = code.trim().toUpperCase();
     const { data: party, error: partyError } = await supabase
       .from("parties")
       .select("id, name, status, start_at, end_at")
-      .eq("code", code.trim().toUpperCase())
-      .single();
+      .eq("code", trimmedCode)
+      .maybeSingle();
 
-    if (partyError || !party) {
+    if (partyError) {
+      console.error("파티 조회 에러:", {
+        code: trimmedCode,
+        error: partyError,
+        userId,
+        userRole,
+      });
+
+      // RLS 정책 문제일 가능성
+      if (partyError.code === "PGRST301" || partyError.message?.includes("permission")) {
+        return errorResponse("파티 조회 권한이 없습니다", 403);
+      }
+
+      return errorResponse("파티 조회 중 오류가 발생했습니다", 500);
+    }
+
+    if (!party) {
+      console.warn("파티를 찾을 수 없음:", { code: trimmedCode, userId });
       return errorResponse("유효하지 않은 파티 코드입니다", 404);
     }
 
@@ -140,7 +175,11 @@ export async function POST(request: Request) {
         : "파티에 참가했습니다. 레벨을 설정해주세요.",
     });
   } catch (error) {
-    console.error("파티 참가 에러:", error);
+    console.error("파티 참가 에러:", {
+      error,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return errorResponse(error instanceof Error ? error.message : "서버 오류가 발생했습니다", 500);
   }
 }
