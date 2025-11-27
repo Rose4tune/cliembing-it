@@ -182,7 +182,7 @@ export async function POST(request: Request) {
     } = {
       party_id: party.id,
       user_id: userId,
-      role: "member",
+      role: "participant", // party_member_role enum: participant, leader, staff, admin
       joined_at: new Date().toISOString(),
     };
 
