@@ -75,10 +75,7 @@ export function TeamRanking({
 
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">실시간 팀 랭킹</h2>
-        <span className="text-sm text-muted-foreground">Total Score</span>
-      </div>
+      <p className="text-gray-400 text-right">Total Score</p>
       <div className="space-y-2">
         {teams.map((team) => {
           const hasMembers = team.members && team.members.length > 0;

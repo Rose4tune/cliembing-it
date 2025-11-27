@@ -418,33 +418,35 @@ export default function RankboardPage() {
           {activeTab === "group" && (
             <>
               {/* Sub Navigation for Group Ranking */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveSubTab("crux")}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-sm font-medium transition-colors",
-                    activeSubTab === "crux"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                  )}
-                >
-                  Crux
-                </button>
-                <button
-                  onClick={() => setActiveSubTab("grip")}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-sm font-medium transition-colors",
-                    activeSubTab === "grip"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                  )}
-                >
-                  Grip
-                </button>
+              <div className="flex justify-between items-center">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveSubTab("crux")}
+                    className={cn(
+                      "min-w-18 px-4 py-1 rounded-full text-sm font-medium transition-colors",
+                      activeSubTab === "crux"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                    )}
+                  >
+                    Crux
+                  </button>
+                  <button
+                    onClick={() => setActiveSubTab("grip")}
+                    className={cn(
+                      "min-w-18 px-4 py-1 rounded-full text-sm font-medium transition-colors",
+                      activeSubTab === "grip"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+                    )}
+                  >
+                    Grip
+                  </button>
+                </div>
+                <p className="text-gray-400 text-left">Hunted Point</p>
               </div>
 
               <div className="space-y-4">
-                <p className="text-gray-400 text-right">Hunted Point</p>
                 <div className="space-y-2">
                   {currentGroupRankings.length === 0 ? (
                     <div className="text-center text-muted-foreground py-8">
@@ -484,67 +486,62 @@ export default function RankboardPage() {
           )}
 
           {activeTab === "team" && (
-            <Card>
-              <CardContent className="pt-6">
-                {teamRankings.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    팀 랭킹 데이터가 없습니다.
-                  </div>
-                ) : (
-                  <TeamRanking teams={teamRankings} highlightTeamId={currentTeamId} />
-                )}
-              </CardContent>
-            </Card>
+            <>
+              {teamRankings.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  팀 랭킹 데이터가 없습니다.
+                </div>
+              ) : (
+                <TeamRanking teams={teamRankings} highlightTeamId={currentTeamId} />
+              )}
+            </>
           )}
 
           {activeTab === "challenge" && (
-            <Card>
-              <CardContent className="pt-6">
-                {rankingData.challenge.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    챌린지 기록이 없습니다.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {rankingData.challenge.map((item) => {
-                      const isFailed = item.status === "all_failed";
-                      const displayTime = isFailed ? "-분 -초" : item.bestTime || "--:--";
+            <>
+              <p className="text-gray-400 text-right">Time Taken</p>
+              {rankingData.challenge.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  챌린지 기록이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {rankingData.challenge.map((item) => {
+                    const isFailed = item.status === "all_failed";
+                    const displayTime = isFailed ? "-분 -초" : item.bestTime || "--:--";
 
-                      return (
-                        <div
-                          key={item.teamId}
-                          className={cn(
-                            "flex items-center justify-between p-3 border rounded-lg",
-                            currentTeamId && item.teamId === currentTeamId
-                              ? "border-primary border-2"
-                              : "",
-                          )}
-                        >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="w-6 flex justify-center flex-shrink-0">
-                              {getRankIcon(item.rank || 0)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm truncate">
-                                {item.teamName || "팀 정보 없음"}
-                              </p>
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                {item.attempts !== undefined && (
-                                  <span>도전: {item.attempts}/2</span>
-                                )}
-                              </div>
-                            </div>
+                    return (
+                      <div
+                        key={item.teamId}
+                        className={cn(
+                          "flex items-center justify-between p-3 border rounded-lg",
+                          currentTeamId && item.teamId === currentTeamId
+                            ? "border-primary border-2"
+                            : "",
+                        )}
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-6 flex justify-center flex-shrink-0">
+                            {getRankIcon(item.rank || 0)}
                           </div>
-                          <div className="text-sm font-semibold flex-shrink-0 ml-2">
-                            {displayTime}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm truncate">
+                              {item.teamName || "팀 정보 없음"}
+                            </p>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {item.attempts !== undefined && <span>도전: {item.attempts}/2</span>}
+                            </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                        <div className="text-sm font-semibold flex-shrink-0 ml-2">
+                          {displayTime}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
