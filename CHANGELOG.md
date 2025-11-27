@@ -1,3 +1,7 @@
+## <small>0.1.5 (2025-11-27)</small>
+
+- fix: 일반 클라이언트 → Service Role Key로 변경 ([ff2430b](https://github.com/Rose4tune/cliembing-it/commit/ff2430b))
+
 ## <small>0.1.4 (2025-11-27)</small>
 
 - fix: 파티 참가자 role 설정 변경(participant) ([31ad428](https://github.com/Rose4tune/cliembing-it/commit/31ad428))
