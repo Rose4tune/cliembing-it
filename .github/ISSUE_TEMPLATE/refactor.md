@@ -1,9 +1,9 @@
 ---
 name: Refactor
 about: 코드 리팩토링을 위한 이슈를 작성해주세요
-title: "[Refactor] "
+title: "[refactor] "
 labels: refactor
-assignees: ''
+assignees: ""
 ---
 
 ## 리팩토링 목적

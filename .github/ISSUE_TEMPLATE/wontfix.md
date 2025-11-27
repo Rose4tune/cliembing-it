@@ -1,9 +1,9 @@
 ---
 name: Won't Fix
 about: 해결하지 않기로 결정한 이슈를 표시해주세요
-title: "[Wontfix] "
+title: "[wontfix] "
 labels: wontfix
-assignees: ''
+assignees: ""
 ---
 
 ## 원본 이슈

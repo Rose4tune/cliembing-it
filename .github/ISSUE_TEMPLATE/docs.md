@@ -1,9 +1,9 @@
 ---
 name: Documentation
 about: 문서 작성/수정을 위한 이슈를 작성해주세요
-title: "[Docs] "
+title: "[docs] "
 labels: docs
-assignees: ''
+assignees: ""
 ---
 
 ## 문서 작성 목적

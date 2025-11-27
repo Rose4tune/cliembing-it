@@ -1,71 +1,91 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import Link from "next/link";
-import { ThemeToggle } from "./components/ThemeToggle";
-import { Button } from "@pkg/ui-web";
+import { useEffect, useState } from "react";
+import { Header } from "./components/Header";
+import { FooterNavigation } from "./components/FooterNavigation";
+import { HeroSection } from "./components/HeroSection";
+import { LoginRequiredCard } from "./components/PartyCards/LoginRequiredCard";
+import { JoinPartyCard } from "./components/PartyCards/JoinPartyCard";
+import { CreatePartyCard } from "./components/PartyCards/CreatePartyCard";
+import { WaitingPartyCard } from "./components/PartyCards/WaitingPartyCard";
+import { ActivePartyCard } from "./components/PartyCards/ActivePartyCard";
+import { FeatureCards } from "./components/PartyCards/FeatureCards";
+import { GamePreviewCard } from "./components/PartyCards/GamePreviewCard";
+import { ParticipatedPartiesCard } from "./components/PartyCards/ParticipatedPartiesCard";
+import { useViewMode } from "./contexts/ViewModeContext";
+
+type PartyStatus = "none" | "waiting" | "active";
 
 export default function Home() {
   const { data: session, status } = useSession();
+  const { isAdminView } = useViewMode();
+  const [canCreateParty, setCanCreateParty] = useState(false);
+
+  const partyStatus: PartyStatus = session ? "none" : "none";
+
+  // 권한 확인 (파티 생성 가능 여부)
+  useEffect(() => {
+    if (!session) return;
+
+    const fetchPermissions = async () => {
+      try {
+        const response = await fetch("/api/user/permissions");
+        const result = await response.json();
+        if (result.success) {
+          setCanCreateParty(result.data.canCreateParty || false);
+        }
+      } catch (error) {
+        console.error("권한 조회 실패:", error);
+      }
+    };
+
+    fetchPermissions();
+  }, [session]);
+
+  const handleJoinParty = (name: string) => {
+    console.log("Joining party with name:", name);
+  };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-background text-foreground">
-      <ThemeToggle />
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center mb-8">
-          Just clIEmbing it 🧗
-        </h1>
-        <p className="text-center text-lg text-muted-foreground">
-          climb together regardless of I or E
-        </p>
-        <p className="text-center mt-4 text-muted-foreground">
-          신나는 클IE밍 볼더링 파티!!
-          <br />
-          우린 함께라면 정상에 오를수 있다!
-          <br />
-          @ㅁ@!!!
-        </p>
+    <div className="flex min-h-screen flex-col">
+      <Header />
 
-        {/* 로그인 상태 표시 및 버튼 */}
-        <div className="mt-12 text-center space-y-4">
+      <main className="flex-1 container max-w-lg mx-auto px-4 py-8 space-y-8 pb-24">
+        <HeroSection />
+
+        <div className="space-y-6">
           {status === "loading" ? (
-            <p className="text-muted-foreground">로딩 중...</p>
-          ) : session ? (
-            <div className="space-y-4">
-              <div className="bg-card border border-border rounded-lg p-6">
-                <p className="text-card-foreground font-semibold mb-2">
-                  ✅ 로그인됨
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  환영합니다, {(session.user as any)?.nickname || session.user?.name || session.user?.email}님!
-                </p>
-                {(session.user as any)?.mbti && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    MBTI: {(session.user as any).mbti}
-                  </p>
-                )}
-              </div>
-              <Button asChild size="lg" className="font-semibold">
-                <Link href="/dashboard">대시보드 가기</Link>
-              </Button>
-            </div>
+            <div className="text-center text-muted-foreground">로딩 중...</div>
+          ) : !session ? (
+            <LoginRequiredCard />
           ) : (
-            <Button asChild size="lg" className="font-semibold">
-              <Link href="/login">로그인하기</Link>
-            </Button>
-            
-          )}
-          <div className="flex gap-3 flex-wrap">
-            <Button variant="primary">Primary</Button>
-            <Button variant="secondary">Secondary</Button>
-            <Button variant="destructive">Destructive</Button>
-            <Button variant="ghost">Ghost</Button>
-            <Button variant="outline">Outline</Button>
-          </div>
+            <>
+              {/* 참여한 파티 목록 */}
+              <ParticipatedPartiesCard />
 
+              {partyStatus === "none" ? (
+                <>
+                  {/* 파티 생성 카드는 관리자 모드일 때만 표시 */}
+                  {isAdminView && canCreateParty && <CreatePartyCard />}
+                  <JoinPartyCard onJoin={handleJoinParty} />
+                </>
+              ) : partyStatus === "waiting" ? (
+                <WaitingPartyCard />
+              ) : (
+                <>
+                  <ActivePartyCard />
+                  <FeatureCards />
+                </>
+              )}
+
+              {/* <GamePreviewCard /> */}
+            </>
+          )}
         </div>
-      </div>
-    </main>
+      </main>
+
+      <FooterNavigation />
+    </div>
   );
 }
-

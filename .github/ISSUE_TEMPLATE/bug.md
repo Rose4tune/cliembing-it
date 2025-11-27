@@ -1,9 +1,9 @@
 ---
 name: Bug Report
 about: Bug 발견 및 해결 시 작성해주세요.
-title: '[Bugfix] '
+title: "[bugfix] "
 labels: bugfix
-assignees: ''
+assignees: ""
 ---
 
 ## 버그 발생 상황

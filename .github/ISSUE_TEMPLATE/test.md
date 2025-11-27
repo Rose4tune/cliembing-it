@@ -1,9 +1,9 @@
 ---
 name: Test
 about: 테스트 작성/개선을 위한 이슈를 작성해주세요
-title: "[Test] "
-labels: 'test'
-assignees: ''
+title: "[test] "
+labels: "test"
+assignees: ""
 ---
 
 ## 테스트 목적

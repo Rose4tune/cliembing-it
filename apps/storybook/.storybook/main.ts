@@ -18,7 +18,7 @@ const config: StorybookConfig = {
     },
   },
   stories: [
-    "../../web/src/**/*.stories.@(ts|tsx|mdx)",
+    "../../web/app/**/*.stories.@(ts|tsx|mdx)",
     "../../../packages/ui/src/**/*.stories.@(ts|tsx|mdx)",
     "../../../packages/ui-web/src/**/*.stories.@(ts|tsx|mdx)",
   ],

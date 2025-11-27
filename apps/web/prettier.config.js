@@ -1,2 +1,2 @@
-export { default } from '@config/prettier.config';
-
+import config from "../../packages/config/prettier.config.js";
+export default config;

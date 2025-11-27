@@ -1,9 +1,9 @@
 ---
 name: Help Wanted
 about: 커뮤니티의 도움이 필요한 이슈를 작성해주세요
-title: "[Help] "
+title: "[help] "
 labels: help wanted
-assignees: ''
+assignees: ""
 ---
 
 ## 필요한 도움

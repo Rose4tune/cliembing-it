@@ -1,6 +1,9 @@
 {
   "name": "@pkg/ui",
   "private": true,
+  "scripts": {
+    "test": "vitest --config ./vitest.config.ts"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./primitives/*": "./src/primitives/*/index.ts"

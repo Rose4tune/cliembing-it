@@ -9,6 +9,7 @@ export {
   AUTH_PAGES,
   AUTH_COOKIE_NAME,
   PROTECTED_ROUTES,
+  DEFAULT_CREW_ID,
 } from "./lib/constants";
 
 // 로거
