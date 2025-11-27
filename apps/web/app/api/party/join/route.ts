@@ -9,6 +9,8 @@ import { numberToLevel, type ClimbingLevel } from "@pkg/shared";
  * POST /api/party/join
  */
 export async function POST(request: Request) {
+  // 함수가 실행되는지 확인하기 위한 로그
+  console.log("[API] /api/party/join POST 요청 수신");
   try {
     // 1. 인증 확인
     const session = await getServerSession(authOptions);
@@ -61,11 +63,21 @@ export async function POST(request: Request) {
 
     // 4. 파티 코드로 파티 조회
     const trimmedCode = code.trim().toUpperCase();
+    console.log("[API] 파티 조회 시도:", { code: trimmedCode, userId, userRole });
+
     const { data: party, error: partyError } = await supabase
       .from("parties")
       .select("id, name, status, start_at, end_at")
       .eq("code", trimmedCode)
       .maybeSingle();
+
+    console.log("[API] 파티 조회 결과:", {
+      hasParty: !!party,
+      hasError: !!partyError,
+      errorCode: partyError?.code,
+      errorMessage: partyError?.message,
+      errorDetails: partyError?.details,
+    });
 
     if (partyError) {
       console.error("파티 조회 에러:", {
@@ -85,6 +97,19 @@ export async function POST(request: Request) {
 
     if (!party) {
       console.warn("파티를 찾을 수 없음:", { code: trimmedCode, userId });
+
+      // RLS 정책으로 인해 결과가 필터링되었을 가능성 확인
+      // 모든 파티 코드로 테스트 쿼리 실행 (디버깅용)
+      const { data: allParties, error: testError } = await supabase
+        .from("parties")
+        .select("code")
+        .limit(5);
+
+      console.log("[API] 파티 조회 테스트:", {
+        testError: testError?.message,
+        availableCodes: allParties?.map((p) => p.code),
+      });
+
       return errorResponse("유효하지 않은 파티 코드입니다", 404);
     }
 

@@ -9,6 +9,8 @@ import { numberToLevel, levelToNumber, type ClimbingLevel } from "@pkg/shared";
  * GET /api/user/profile
  */
 export async function GET() {
+  // 함수가 실행되는지 확인하기 위한 로그
+  console.log("[API] /api/user/profile GET 요청 수신");
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
