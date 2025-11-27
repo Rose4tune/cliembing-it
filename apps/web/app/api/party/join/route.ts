@@ -54,23 +54,41 @@ export async function POST(request: Request) {
     }
 
     // 5. 이미 참가한 파티인지 확인
-    const { data: existingMember } = await supabase
+    const { data: existingMember, error: existingMemberError } = await supabase
       .from("party_members")
       .select("id")
       .eq("party_id", party.id)
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
+
+    if (existingMemberError) {
+      console.error("파티 멤버 확인 에러:", existingMemberError);
+      return errorResponse("파티 참가 확인 중 오류가 발생했습니다", 500);
+    }
 
     if (existingMember) {
       return errorResponse("이미 참가한 파티입니다", 400);
     }
 
     // 6. 사용자의 base_level 조회
-    const { data: user } = await supabase
+    const { data: user, error: userError } = await supabase
       .from("users")
       .select("base_level")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
+
+    if (userError) {
+      console.error("사용자 조회 에러:", userError);
+      return errorResponse("사용자 정보를 조회할 수 없습니다. 잠시 후 다시 시도해주세요.", 500);
+    }
+
+    // 사용자가 아직 생성되지 않은 경우 (새로운 유저 로그인 직후)
+    if (!user) {
+      return errorResponse(
+        "사용자 정보가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.",
+        503,
+      );
+    }
 
     // 7. 레벨 결정: level 파라미터가 있으면 사용, 없으면 base_level 사용
     let finalLevel: ClimbingLevel | null = null;
