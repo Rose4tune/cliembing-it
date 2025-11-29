@@ -1,7 +1,6 @@
 "use client";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@pkg/ui-web";
-import { Clock } from "lucide-react";
 
 interface TeamGameStatusCardProps {
   teamTotalScore: number;
@@ -21,12 +20,6 @@ export function TeamGameStatusCard({
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>우리팀 게임 현황</CardTitle>
-          {/* {timeRemaining && ( */}
-          <div className="flex items-center gap-1 text-sm font-semibold text-destructive">
-            <Clock className="h-4 w-4" />
-            <span>{timeRemaining ? timeRemaining : "00:00"}</span>
-          </div>
-          {/* )} */}
         </div>
       </CardHeader>
       <CardContent>
