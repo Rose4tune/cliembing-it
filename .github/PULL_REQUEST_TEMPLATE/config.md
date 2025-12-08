@@ -1,9 +1,9 @@
 ---
-name: Config
+name: config
 about: 설정 변경을 위한 PR입니다
-title: "[Config] "
+title: "[config] "
 labels: config
-assignees: ''
+assignees: ""
 ---
 
 관련 이슈: Closes #

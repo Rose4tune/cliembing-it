@@ -1,5 +1,5 @@
 ---
-name: Bug Report
+name: bug report
 about: Bug 발견 및 해결 시 작성해주세요.
 title: "[bugfix] "
 labels: bugfix

@@ -1,5 +1,5 @@
 ---
-name: Test
+name: test
 about: 테스트 작성/개선을 위한 이슈를 작성해주세요
 title: "[test] "
 labels: "test"

@@ -1,5 +1,5 @@
 ---
-name: Refactor
+name: refactor
 about: 코드 리팩토링을 위한 이슈를 작성해주세요
 title: "[refactor] "
 labels: refactor

@@ -1,9 +1,9 @@
 ---
-name: Test
+name: test
 about: 테스트 코드 작성/개선을 위한 PR입니다
-title: "[Test] "
+title: "[test] "
 labels: test'
-assignees: ''
+assignees: ""
 ---
 
 관련 이슈: Closes #

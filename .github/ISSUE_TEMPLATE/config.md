@@ -1,5 +1,5 @@
 ---
-name: Config
+name: config
 about: 설정 변경을 위한 이슈를 작성해주세요.
 title: "[config] "
 labels: config
