@@ -7,7 +7,10 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
  * 특정 파티에서 사용자의 권한 확인 API
  * GET /api/party/[partyId]/permissions
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     // 1. 인증 확인
     const session = await getServerSession(authOptions);

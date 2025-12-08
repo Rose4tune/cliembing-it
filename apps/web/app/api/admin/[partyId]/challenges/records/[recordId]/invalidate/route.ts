@@ -9,7 +9,7 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ partyId: string; recordId: string }> },
-) {
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

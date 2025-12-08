@@ -1,9 +1,9 @@
 ---
-name: Hotfix
+name: hotfix
 about: 프로덕션 긴급 수정을 위한 PR입니다
-title: "[Hotfix] "
-labels: 'HOTFIX!'
-assignees: ''
+title: "[hotfix] "
+labels: "HOTFIX!"
+assignees: ""
 ---
 
 관련 이슈: Closes #

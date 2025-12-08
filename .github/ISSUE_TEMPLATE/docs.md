@@ -1,5 +1,5 @@
 ---
-name: Documentation
+name: documentation
 about: 문서 작성/수정을 위한 이슈를 작성해주세요
 title: "[docs] "
 labels: docs

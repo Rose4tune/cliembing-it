@@ -6,7 +6,10 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
  * 파티 멤버 목록 조회 API (관리자용)
  * GET /api/admin/[partyId]/users
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -141,7 +144,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ partyId: string }> },
-) {
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

@@ -1,9 +1,9 @@
 ---
-name: Chore
+name: chore
 about: 빌드, 도구, 설정 등 일반적인 작업을 위한 PR입니다
-title: "[Chore] "
-labels: ''
-assignees: ''
+title: "[chore] "
+labels: ""
+assignees: ""
 ---
 
 관련 이슈: Closes #

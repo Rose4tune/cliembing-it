@@ -1,9 +1,9 @@
 ---
-name: Deploy
+name: deploy
 about: 배포를 위한 PR입니다
-title: "[Deploy] "
+title: "[deploy] "
 labels: deploy
-assignees: ''
+assignees: ""
 ---
 
 관련 이슈: Closes #

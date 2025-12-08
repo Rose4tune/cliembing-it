@@ -1,6 +1,47 @@
 import { getServerSession, authOptions } from "@pkg/auth";
-import { createServerClient, createAdminClient } from "@pkg/supabase/server";
+import { createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
+
+// 타입 정의
+interface RankingItem {
+  userId: string;
+  nickname: string;
+  teamId: string | null;
+  teamName: string | null;
+  totalScore: number;
+  rank: number;
+}
+
+interface TeamRankingItem {
+  rank: number;
+  teamNumber: number;
+  teamId: string;
+  teamName: string;
+  totalScore: number;
+  usedPieces: number;
+  totalPieces: number;
+  completedLines: number;
+}
+
+interface Team {
+  id: string;
+  name: string;
+}
+
+interface ChallengeRecord {
+  team_id: string;
+  attempt_number: number;
+  duration: string | null;
+  status: string;
+  started_at: string | null;
+}
+
+interface TeamChallengeData {
+  bestTime: string | null;
+  bestStartedAt: string | null;
+  attempts: number;
+  failures: number;
+}
 
 /**
  * "5분 23초" 형식의 문자열을 밀리초로 변환
@@ -14,16 +55,14 @@ function parseDurationToMs(duration: string | null): number {
   return (minutes * 60 + seconds) * 1000;
 }
 
-type TeamMember = {
-  name: string;
-  level: string;
-};
-
 /**
  * 랭킹 조회 API (일반 사용자용)
  * GET /api/party/[partyId]/rankings
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -74,10 +113,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const party = partyResult.data;
 
     // Supabase SQL 함수로 그룹별 랭킹 계산 (점수 높은 순으로 정렬)
-    let cruxRankings: any[] = [];
-    let gripRankings: any[] = [];
-    let teamRankings: any[] = [];
-    let challengeRankings: any[] = [];
+    let cruxRankings: RankingItem[] = [];
+    let gripRankings: RankingItem[] = [];
+    let teamRankings: TeamRankingItem[] = [];
+    let challengeRankings: Array<{
+      teamId: string;
+      teamName: string;
+      bestTime: string | null;
+      attempts: number;
+      failures: number;
+      status: string;
+      rank?: number;
+      time?: string;
+    }> = [];
 
     // Crux 그룹 랭킹 조회 (SQL 함수 사용)
     const cruxResult = await executeSupabaseQuery(async () => {
@@ -87,14 +135,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     });
 
     if (cruxResult.success && cruxResult.data) {
-      cruxRankings = cruxResult.data.map((item: any) => ({
-        userId: item.user_id,
-        nickname: item.nickname,
-        teamId: item.team_id,
-        teamName: item.team_name,
-        totalScore: item.total_score || 0,
-        rank: item.rank,
-      }));
+      cruxRankings = cruxResult.data.map(
+        (item: {
+          user_id: string;
+          nickname: string;
+          team_id: string | null;
+          team_name: string | null;
+          total_score: number | null;
+          rank: number;
+        }) => ({
+          userId: item.user_id,
+          nickname: item.nickname,
+          teamId: item.team_id,
+          teamName: item.team_name,
+          totalScore: item.total_score || 0,
+          rank: item.rank,
+        }),
+      );
     }
 
     // Grip 그룹 랭킹 조회 (SQL 함수 사용)
@@ -105,14 +162,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     });
 
     if (gripResult.success && gripResult.data) {
-      gripRankings = gripResult.data.map((item: any) => ({
-        userId: item.user_id,
-        nickname: item.nickname,
-        teamId: item.team_id,
-        teamName: item.team_name,
-        totalScore: item.total_score || 0,
-        rank: item.rank,
-      }));
+      gripRankings = gripResult.data.map(
+        (item: {
+          user_id: string;
+          nickname: string;
+          team_id: string | null;
+          team_name: string | null;
+          total_score: number | null;
+          rank: number;
+        }) => ({
+          userId: item.user_id,
+          nickname: item.nickname,
+          teamId: item.team_id,
+          teamName: item.team_name,
+          totalScore: item.total_score || 0,
+          rank: item.rank,
+        }),
+      );
     }
 
     // 개인 랭킹 (Crux + Grip 합쳐서 정렬) - SQL 함수 결과를 합치기만 함
@@ -140,32 +206,42 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     });
 
     // 모든 팀을 포함하되, 랭킹 데이터가 있으면 사용
-    const teamRankingsMap = new Map<string, any>();
+    const teamRankingsMap = new Map<string, TeamRankingItem>();
     if (teamRankingsResult.success && teamRankingsResult.data) {
-      teamRankingsResult.data.forEach((item: any) => {
-        const teamNumberMatch = item.team_name?.match(/(\d+)/);
-        const teamNumber = teamNumberMatch ? parseInt(teamNumberMatch[1], 10) : 0;
+      teamRankingsResult.data.forEach(
+        (item: {
+          team_id: string;
+          team_name: string;
+          total_score: number | null;
+          used_pieces: number | null;
+          total_pieces: number | null;
+          completed_lines: number | null;
+          rank: number;
+        }) => {
+          const teamNumberMatch = item.team_name?.match(/(\d+)/);
+          const teamNumber = teamNumberMatch?.[1] ? parseInt(teamNumberMatch[1], 10) : 0;
 
-        teamRankingsMap.set(item.team_id, {
-          rank: item.rank,
-          teamNumber,
-          teamId: item.team_id,
-          teamName: item.team_name,
-          totalScore: Number(item.total_score) || 0,
-          usedPieces: Number(item.used_pieces) || 0,
-          totalPieces: Number(item.total_pieces) || 0,
-          completedLines: Number(item.completed_lines) || 0,
-        });
-      });
+          teamRankingsMap.set(item.team_id, {
+            rank: item.rank,
+            teamNumber,
+            teamId: item.team_id,
+            teamName: item.team_name,
+            totalScore: Number(item.total_score) || 0,
+            usedPieces: Number(item.used_pieces) || 0,
+            totalPieces: Number(item.total_pieces) || 0,
+            completedLines: Number(item.completed_lines) || 0,
+          });
+        },
+      );
     }
 
     // 모든 팀을 포함 (랭킹 데이터가 없으면 0점으로 설정)
     if (allTeamsResult.success && allTeamsResult.data) {
       const existingRankingsCount = teamRankingsMap.size;
-      allTeamsResult.data.forEach((team: any, index: number) => {
+      allTeamsResult.data.forEach((team: Team, index: number) => {
         if (!teamRankingsMap.has(team.id)) {
           const teamNumberMatch = team.name?.match(/(\d+)/);
-          const teamNumber = teamNumberMatch ? parseInt(teamNumberMatch[1], 10) : index + 1;
+          const teamNumber = teamNumberMatch?.[1] ? parseInt(teamNumberMatch[1], 10) : index + 1;
 
           teamRankingsMap.set(team.id, {
             rank: existingRankingsCount + index + 1,
@@ -214,16 +290,32 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
 
       if (teamMembersResult.success && teamMembersResult.data) {
         const membersMap = new Map<string, Array<{ name: string; level: string }>>();
-        teamMembersResult.data.forEach((member: any) => {
-          if (!member.team_id) return;
-          if (!membersMap.has(member.team_id)) {
-            membersMap.set(member.team_id, []);
-          }
-          membersMap.get(member.team_id)?.push({
-            name: member.users?.nickname || "알 수 없음",
-            level: member.level || "White",
-          });
-        });
+        teamMembersResult.data.forEach(
+          (member: {
+            team_id: string | null;
+            level: string | null;
+            users?:
+              | {
+                  id: string;
+                  nickname: string;
+                }
+              | {
+                  id: string;
+                  nickname: string;
+                }[]
+              | null;
+          }) => {
+            if (!member.team_id) return;
+            if (!membersMap.has(member.team_id)) {
+              membersMap.set(member.team_id, []);
+            }
+            const user = Array.isArray(member.users) ? member.users[0] : member.users;
+            membersMap.get(member.team_id)?.push({
+              name: user?.nickname || "알 수 없음",
+              level: member.level || "White",
+            });
+          },
+        );
 
         teamRankings = teamRankings.map((team) => ({
           ...team,
@@ -234,7 +326,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
 
     // 챌린지 랭킹 계산
     if (allTeamsResult.success && allTeamsResult.data) {
-      const allTeamIds = allTeamsResult.data.map((team: any) => team.id);
+      const allTeamIds = allTeamsResult.data.map((team: Team) => team.id);
 
       // 챌린지 기록 조회
       const challengeRecordsResult = await executeSupabaseQuery(async () => {
@@ -247,9 +339,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       });
 
       // 팀별로 최고 기록 찾기
-      const teamChallengeMap = new Map<string, any>();
+      const teamChallengeMap = new Map<string, TeamChallengeData>();
       if (challengeRecordsResult.success && challengeRecordsResult.data) {
-        challengeRecordsResult.data.forEach((record: any) => {
+        challengeRecordsResult.data.forEach((record: ChallengeRecord) => {
           const teamId = record.team_id;
           if (!teamChallengeMap.has(teamId)) {
             teamChallengeMap.set(teamId, {
@@ -261,6 +353,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
           }
 
           const teamData = teamChallengeMap.get(teamId);
+          if (!teamData) {
+            // 이미 위에서 set했으므로 이 경우는 발생하지 않아야 하지만 타입 안전성을 위해 체크
+            return;
+          }
           // 실패 기록도 attempts에 포함
           teamData.attempts += 1;
           if (record.status === "failed") {
@@ -278,7 +374,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       }
 
       // 모든 팀에 대해 챌린지 랭킹 생성
-      challengeRankings = allTeamsResult.data.map((team: any) => {
+      challengeRankings = allTeamsResult.data.map((team: Team) => {
         const teamData = teamChallengeMap.get(team.id);
         const attempts = teamData?.attempts || 0;
         const failures = teamData?.failures || 0;

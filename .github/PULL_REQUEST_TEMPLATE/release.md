@@ -1,9 +1,9 @@
 ---
-name: Release
+name: release
 about: 새 버전 릴리스를 위한 PR입니다
-title: "[Release] v"
+title: "[release] v"
 labels: release
-assignees: ''
+assignees: ""
 ---
 
 관련 이슈: Closes #
@@ -44,15 +44,19 @@ assignees: ''
 ## v X.X.X (YYYY-MM-DD)
 
 ### Added
+
 -
 
 ### Changed
+
 -
 
 ### Fixed
+
 -
 
 ### Removed
+
 -
 ```
 

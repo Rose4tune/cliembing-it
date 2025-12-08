@@ -6,7 +6,10 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
  * 챌린지 기록 저장 API (관리자용)
  * POST /api/admin/[partyId]/challenges/records
  */
-export async function POST(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -115,7 +118,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ par
  * 챌린지 기록 조회 API (관리자용)
  * GET /api/admin/[partyId]/challenges/records
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

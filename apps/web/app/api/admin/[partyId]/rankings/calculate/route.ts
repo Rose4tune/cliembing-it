@@ -8,6 +8,46 @@ import {
 } from "@pkg/shared";
 import { getLevelGroup, type ClimbingLevel, type LevelGroup } from "@pkg/shared";
 
+// 타입 정의
+interface PartyMember {
+  user_id: string;
+  level: string | null;
+  team_id: string | null;
+}
+
+interface TotalScore {
+  user_id: string;
+  total_score: number | null;
+}
+
+interface User {
+  id: string;
+  nickname: string;
+  email: string | null;
+}
+
+interface Team {
+  id: string;
+  name: string;
+}
+
+interface UserRanking {
+  userId: string;
+  nickname: string;
+  teamId: string | null;
+  teamName: string | null;
+  totalScore: number;
+}
+
+interface RankingResult {
+  userId: string;
+  nickname: string;
+  teamId: string | null;
+  teamName: string | null;
+  totalScore: number;
+  rank: number;
+}
+
 /**
  * 랭킹 계산 (워커용)
  * 큐에서 작업을 가져와서 랭킹을 계산하고 rankings 테이블 업데이트
@@ -16,7 +56,7 @@ import { getLevelGroup, type ClimbingLevel, type LevelGroup } from "@pkg/shared"
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ partyId?: string }> },
-) {
+): Promise<Response> {
   const supabase = createAdminClient();
 
   try {
@@ -96,11 +136,11 @@ async function calculateGroupRankings(supabase: SupabaseClient, partyId: string)
       .eq("party_id", partyId);
   });
 
-  const userIds = membersResult.data.map((m: any) => m.user_id);
+  const userIds = (membersResult.data as PartyMember[]).map((m) => m.user_id);
   const totalScoresMap = new Map<string, number>();
 
   if (totalScoresResult.success && totalScoresResult.data) {
-    totalScoresResult.data.forEach((item: any) => {
+    (totalScoresResult.data as TotalScore[]).forEach((item) => {
       totalScoresMap.set(item.user_id, item.total_score || 0);
     });
   }
@@ -116,17 +156,17 @@ async function calculateGroupRankings(supabase: SupabaseClient, partyId: string)
     return await supabase.from("users").select("id, nickname, email").in("id", userIds);
   });
 
-  const usersMap = new Map();
+  const usersMap = new Map<string, User>();
   if (usersResult.success && usersResult.data) {
-    usersResult.data.forEach((user: any) => {
+    (usersResult.data as User[]).forEach((user) => {
       usersMap.set(user.id, user);
     });
   }
 
   // 4. 팀 정보 조회
-  const teamIds = membersResult.data
-    .map((m: any) => m.team_id)
-    .filter((id: string | null) => id !== null);
+  const teamIds = (membersResult.data as PartyMember[])
+    .map((m) => m.team_id)
+    .filter((id): id is string => id !== null);
 
   const teamsMap = new Map();
   if (teamIds.length > 0) {
@@ -135,7 +175,7 @@ async function calculateGroupRankings(supabase: SupabaseClient, partyId: string)
     });
 
     if (teamsResult.success && teamsResult.data) {
-      teamsResult.data.forEach((team: any) => {
+      (teamsResult.data as Team[]).forEach((team) => {
         teamsMap.set(team.id, team);
       });
     }
@@ -158,7 +198,7 @@ async function calculateGroupRankings(supabase: SupabaseClient, partyId: string)
     totalScore: number;
   }> = [];
 
-  membersResult.data.forEach((member: any) => {
+  (membersResult.data as PartyMember[]).forEach((member) => {
     const userId = member.user_id;
     const userBaseLevel = member.level as ClimbingLevel | null;
     const totalScore = totalScoresMap.get(userId) || 0;
@@ -221,7 +261,7 @@ async function updateGroupRankings(
   supabase: SupabaseClient,
   partyId: string,
   group: LevelGroup,
-  rankings: any[],
+  rankings: RankingResult[],
 ) {
   const result = await executeSupabaseQuery(async () => {
     return await supabase
@@ -304,7 +344,16 @@ async function calculateTeamRankings(supabase: SupabaseClient, partyId: string) 
 /**
  * 팀 랭킹 저장
  */
-async function updateTeamRankings(supabase: SupabaseClient, partyId: string, rankings: any[]) {
+async function updateTeamRankings(
+  supabase: SupabaseClient,
+  partyId: string,
+  rankings: Array<{
+    teamId: string;
+    teamName: string;
+    totalScore: number;
+    rank: number;
+  }>,
+) {
   const result = await executeSupabaseQuery(async () => {
     return await supabase
       .from("rankings")

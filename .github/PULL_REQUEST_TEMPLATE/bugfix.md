@@ -1,9 +1,9 @@
 ---
-name: Bugfix
+name: bugfix
 about: 버그 수정을 위한 PR입니다
-title: "[Bugfix] "
+title: "[bugfix] "
 labels: bugfix
-assignees: ''
+assignees: ""
 ---
 
 관련 이슈: Closes #

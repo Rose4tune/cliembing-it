@@ -1,5 +1,5 @@
 ---
-name: Help Wanted
+name: help wanted
 about: 커뮤니티의 도움이 필요한 이슈를 작성해주세요
 title: "[help] "
 labels: help wanted

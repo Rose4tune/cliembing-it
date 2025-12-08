@@ -1,5 +1,5 @@
 ---
-name: Won't Fix
+name: won't fix
 about: 해결하지 않기로 결정한 이슈를 표시해주세요
 title: "[wontfix] "
 labels: wontfix

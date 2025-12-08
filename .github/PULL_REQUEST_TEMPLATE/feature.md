@@ -1,9 +1,9 @@
 ---
-name: Feature
+name: feature
 about: 새로운 기능을 추가하기 위한 PR입니다
-title: "[Feat] "
+title: "[feat] "
 labels: feature
-assignees: ''
+assignees: ""
 ---
 
 관련 이슈: Closes #

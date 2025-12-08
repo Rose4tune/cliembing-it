@@ -8,7 +8,10 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
  * 팀 블럭 조회 API
  * GET /api/party/[partyId]/team-blocks?teamId=xxx
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -133,7 +136,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
  * 팀 블럭 추가 API (특수 블럭 획득 등)
  * POST /api/party/[partyId]/team-blocks
  */
-export async function POST(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

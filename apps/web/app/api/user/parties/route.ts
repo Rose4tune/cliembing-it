@@ -1,13 +1,33 @@
-import { NextResponse } from "next/server";
 import { getServerSession, authOptions } from "@pkg/auth";
 import { createServerClient, createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
+
+// 타입 정의
+interface PartyMember {
+  party_id: string;
+  team_id: string | null;
+}
+
+interface Team {
+  id: string;
+  name: string;
+}
+
+interface Party {
+  id: string;
+  [key: string]: unknown;
+}
+
+interface UserMemberInfo {
+  team_id: string | null;
+  team_name: string | null;
+}
 
 /**
  * 사용자가 참여한 파티 목록 조회 API
  * GET /api/user/parties
  */
-export async function GET() {
+export async function GET(): Promise<Response> {
   try {
     // 1. 인증 확인
     const session = await getServerSession(authOptions);
@@ -93,9 +113,11 @@ export async function GET() {
 
     // 5. 각 파티별 참가자 수 조회 및 사용자 팀 정보 추가
     // team_id가 있으면 teams 테이블에서 team 정보 조회 (Service Role Key 사용)
-    const teamIds = members.map((m: any) => m.team_id).filter((id: any) => id != null);
+    const teamIds = (members as PartyMember[])
+      .map((m) => m.team_id)
+      .filter((id): id is string => id != null);
 
-    const teamMap = new Map();
+    const teamMap = new Map<string, Team>();
     if (teamIds.length > 0) {
       const { data: teams, error: teamsError } = await supabaseForQuery
         .from("teams")
@@ -103,14 +125,14 @@ export async function GET() {
         .in("id", teamIds);
 
       if (!teamsError && teams) {
-        teams.forEach((team: any) => {
+        teams.forEach((team: Team) => {
           teamMap.set(team.id, team);
         });
       }
     }
 
-    const memberMap = new Map();
-    members.forEach((member: any) => {
+    const memberMap = new Map<string, UserMemberInfo>();
+    (members as PartyMember[]).forEach((member) => {
       const team = member.team_id ? teamMap.get(member.team_id) : null;
       memberMap.set(member.party_id, {
         team_id: member.team_id,
@@ -119,7 +141,7 @@ export async function GET() {
     });
 
     const partiesWithCount = await Promise.all(
-      partiesResult.data.map(async (party: any) => {
+      partiesResult.data.map(async (party: Party) => {
         try {
           const { count, error: countError } = await supabaseForQuery
             .from("party_members")

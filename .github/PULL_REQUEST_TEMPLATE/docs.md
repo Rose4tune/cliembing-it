@@ -1,9 +1,9 @@
 ---
-name: Documentation
+name: documentation
 about: 문서 작성/수정을 위한 PR입니다
-title: "[Docs] "
+title: "[docs] "
 labels: docs
-assignees: ''
+assignees: ""
 ---
 
 관련 이슈: Closes #

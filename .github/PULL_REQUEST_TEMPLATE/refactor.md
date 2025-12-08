@@ -1,9 +1,9 @@
 ---
-name: Refactor
+name: refactor
 about: 코드 리팩토링을 위한 PR입니다
-title: "[Refactor] "
+title: "[refactor] "
 labels: refactor
-assignees: ''
+assignees: ""
 ---
 
 관련 이슈: Closes #
