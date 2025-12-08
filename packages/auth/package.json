@@ -8,9 +8,11 @@
     "./options": "./lib/options.ts",
     "./constants": "./lib/constants.ts"
   },
+  "dependencies": {
+    "next-auth": "^4"
+  },
   "peerDependencies": {
     "next": "^16",
-    "next-auth": "^4",
     "react": "^19"
   }
 }
