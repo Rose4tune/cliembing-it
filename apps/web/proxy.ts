@@ -13,12 +13,9 @@ export default withAuth(
       signIn: "/login",
     },
     secret: process.env.NEXTAUTH_SECRET,
-  }
+  },
 );
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/party/:path*",
-  ],
+  matcher: ["/dashboard/:path*", "/party/:path*"],
 };
