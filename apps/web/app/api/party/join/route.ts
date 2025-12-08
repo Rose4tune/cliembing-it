@@ -8,7 +8,7 @@ import { numberToLevel, type ClimbingLevel } from "@pkg/shared";
  * 파티 참가 API
  * POST /api/party/join
  */
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   // 함수가 실행되는지 확인하기 위한 로그
   console.log("[API] /api/party/join POST 요청 수신");
   try {

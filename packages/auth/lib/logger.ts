@@ -6,35 +6,34 @@
 const isDev = process.env.NODE_ENV === "development";
 
 export const authLogger = {
-  jwt: (data: any) => {
+  jwt: (data: unknown) => {
     if (isDev) console.log("🔐 [NextAuth JWT]", data);
   },
   session: (message: string) => {
     if (isDev) console.log("📱 [NextAuth Session]", message);
   },
-  signIn: (data: any) => {
+  signIn: (data: unknown) => {
     if (isDev) console.log("🔑 [NextAuth SignIn]", data);
   },
   provider: (message: string) => {
     if (isDev) console.log("🔌 [Provider]", message);
   },
-  config: (data: any) => {
+  config: (data: unknown) => {
     if (isDev) console.log("⚙️ [Config]", data);
   },
-  error: (message: string, error?: any) => {
+  error: (message: string, error?: unknown) => {
     console.error("❌ [Auth Error]", message, error || "");
   },
 };
 
 export const supabaseLogger = {
-  sync: (message: string, data?: any) => {
+  sync: (message: string, data?: unknown) => {
     if (isDev) console.log("🔄 [Supabase Sync]", message, data || "");
   },
   success: (message: string) => {
     if (isDev) console.log("✅ [Supabase]", message);
   },
-  error: (message: string, error?: any) => {
+  error: (message: string, error?: unknown) => {
     console.error("❌ [Supabase Error]", message, error || "");
   },
 };
-

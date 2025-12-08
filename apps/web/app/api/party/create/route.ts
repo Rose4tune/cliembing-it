@@ -14,7 +14,7 @@ const pendingRequests = new Map<string, Promise<any>>();
  * - 모든 파티는 기본 크루 "클IE밍"에 속함
  * - 중복 요청 방지: 동일한 사용자의 동시 요청은 하나만 처리
  */
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   let userId: string | null = null;
   let requestKey: string | null = null;
 

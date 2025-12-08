@@ -8,7 +8,7 @@ import { numberToLevel, levelToNumber, type ClimbingLevel } from "@pkg/shared";
  * 사용자 프로필 조회 API
  * GET /api/user/profile
  */
-export async function GET() {
+export async function GET(): Promise<Response> {
   // 함수가 실행되는지 확인하기 위한 로그
   console.log("[API] /api/user/profile GET 요청 수신");
   try {
@@ -138,7 +138,7 @@ export async function GET() {
  * 사용자 프로필 수정 API
  * PATCH /api/user/profile
  */
-export async function PATCH(request: Request) {
+export async function PATCH(request: Request): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

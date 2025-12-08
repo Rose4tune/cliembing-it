@@ -7,7 +7,7 @@ import { executeSupabaseQuery, successResponse, errorResponse } from "@pkg/supab
  * GET /api/supabase/test?admin=true (강제 관리자 모드)
  * 로그인한 사용자의 role이 'admin'이면 자동으로 관리자 모드 사용
  */
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   try {
     const { searchParams } = new URL(request.url);
     const forceAdmin = searchParams.get("admin") === "true";
@@ -96,7 +96,7 @@ export async function GET(request: Request) {
  * body: { table, action, data?, useAdmin?: boolean }
  * 로그인한 사용자의 role이 'admin'이면 자동으로 관리자 모드 사용
  */
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   try {
     const body = await request.json();
     const { table, action, data: requestData, useAdmin: forceAdmin = false } = body;

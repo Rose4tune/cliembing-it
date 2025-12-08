@@ -8,8 +8,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // executeSupabaseQuery는 api-helpers에서 가져오지만,
 // shared 패키지에서는 직접 구현하거나 다른 방법 사용
 async function executeQuery<T>(
-  queryFn: () => Promise<{ data: T | null; error: any }>,
-): Promise<{ success: boolean; data?: T; error?: any }> {
+  queryFn: () => Promise<{ data: T | null; error: unknown }>,
+): Promise<{ success: boolean; data?: T; error?: unknown }> {
   try {
     const result = await queryFn();
     if (result.error) {
@@ -45,7 +45,14 @@ export async function enqueueRankingCalculation(
     if (!result.success) {
       return {
         success: false,
-        error: result.error?.message || "큐에 추가하는데 실패했습니다",
+        error:
+          (result.error instanceof Error
+            ? result.error.message
+            : typeof result.error === "object" &&
+                result.error !== null &&
+                "message" in result.error
+              ? String(result.error.message)
+              : null) || "큐에 추가하는데 실패했습니다",
       };
     }
 
@@ -153,7 +160,14 @@ export async function completeRankingCalculation(
     if (!result.success) {
       return {
         success: false,
-        error: result.error?.message || "완료 처리 실패",
+        error:
+          (result.error instanceof Error
+            ? result.error.message
+            : typeof result.error === "object" &&
+                result.error !== null &&
+                "message" in result.error
+              ? String(result.error.message)
+              : null) || "완료 처리 실패",
       };
     }
 
@@ -193,7 +207,14 @@ export async function failRankingCalculation(
     if (!result.success) {
       return {
         success: false,
-        error: result.error?.message || "실패 처리 실패",
+        error:
+          (result.error instanceof Error
+            ? result.error.message
+            : typeof result.error === "object" &&
+                result.error !== null &&
+                "message" in result.error
+              ? String(result.error.message)
+              : null) || "실패 처리 실패",
       };
     }
 

@@ -8,7 +8,10 @@ import { ENABLED_LEVELS, calculateLevelScore, type LevelPointsConfig } from "@pk
  * 점수 조회 API
  * GET /api/party/[partyId]/scores
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -92,7 +95,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
  * 점수 저장/업데이트 API
  * POST /api/party/[partyId]/scores
  */
-export async function POST(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

@@ -50,7 +50,7 @@ export function errorResponse(
  */
 export function handleSupabaseResult<T>(
   result: SupabaseResult<T>,
-  successMessage?: string,
+  _successMessage?: string,
 ) {
   if (result.success && result.data !== null) {
     return successResponse(result.data);
