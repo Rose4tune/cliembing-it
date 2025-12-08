@@ -11,7 +11,7 @@ import type { PartyStatus } from "@pkg/shared";
  * 요구사항:
  * - 관리자 권한 필요 (role = 'admin')
  */
-export async function PATCH(request: Request) {
+export async function PATCH(request: Request): Promise<Response> {
   try {
     // 1. 인증 확인
     const session = await getServerSession(authOptions);

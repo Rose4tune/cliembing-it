@@ -7,7 +7,10 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
  * 파티 멤버 정보 조회 API
  * GET /api/party/[partyId]/member
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

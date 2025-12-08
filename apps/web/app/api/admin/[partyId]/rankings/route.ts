@@ -2,6 +2,36 @@ import { getServerSession, authOptions } from "@pkg/auth";
 import { createAdminClient } from "@pkg/supabase/server";
 import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supabase/api-helpers";
 
+// 타입 정의
+interface RankingItem {
+  userId: string;
+  nickname: string;
+  teamId: string | null;
+  teamName: string | null;
+  totalScore: number;
+  rank: number;
+}
+
+interface Team {
+  id: string;
+  name: string;
+}
+
+interface ChallengeRecord {
+  team_id: string;
+  attempt_number: number;
+  duration: string | null;
+  status: string;
+  started_at: string | null;
+}
+
+interface TeamChallengeData {
+  bestTime: string | null;
+  bestStartedAt: string | null;
+  attempts: number;
+  failures: number;
+}
+
 /**
  * "5분 23초" 형식의 문자열을 밀리초로 변환
  */
@@ -18,7 +48,10 @@ function parseDurationToMs(duration: string | null): number {
  * 전체 랭킹 조회 API (관리자용)
  * GET /api/admin/[partyId]/rankings
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -34,11 +67,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     const supabase = createAdminClient();
 
     // Supabase SQL 함수로 그룹별 랭킹 계산 (점수 높은 순으로 정렬)
-    let cruxRankings: any[] = [];
-    let gripRankings: any[] = [];
-    let personalRankings: any[] = [];
-    let teamRankings: any[] = [];
-    let challengeRankings: any[] = [];
+    let cruxRankings: RankingItem[] = [];
+    let gripRankings: RankingItem[] = [];
+    let personalRankings: Array<{
+      user: { id: string; nickname: string };
+      totalScore: number;
+      rank: number;
+    }> = [];
+    let teamRankings: Array<{
+      teamId: string;
+      teamName: string;
+      totalScore: number;
+      rank: number;
+    }> = [];
+    let challengeRankings: Array<{
+      teamId: string;
+      teamName: string;
+      bestTime: string | null;
+      attempts: number;
+      failures: number;
+      status: string;
+      rank?: number;
+      time?: string;
+    }> = [];
 
     // Crux 그룹 랭킹 조회 (SQL 함수 사용)
     const cruxResult = await executeSupabaseQuery(async () => {
@@ -48,14 +99,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     });
 
     if (cruxResult.success && cruxResult.data) {
-      cruxRankings = cruxResult.data.map((item: any) => ({
-        userId: item.user_id,
-        nickname: item.nickname,
-        teamId: item.team_id,
-        teamName: item.team_name,
-        totalScore: item.total_score || 0,
-        rank: item.rank,
-      }));
+      cruxRankings = cruxResult.data.map(
+        (item: {
+          user_id: string;
+          nickname: string;
+          team_id: string | null;
+          team_name: string | null;
+          total_score: number | null;
+          rank: number;
+        }) => ({
+          userId: item.user_id,
+          nickname: item.nickname,
+          teamId: item.team_id,
+          teamName: item.team_name,
+          totalScore: item.total_score || 0,
+          rank: item.rank,
+        }),
+      );
     }
 
     // Grip 그룹 랭킹 조회 (SQL 함수 사용)
@@ -66,14 +126,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
     });
 
     if (gripResult.success && gripResult.data) {
-      gripRankings = gripResult.data.map((item: any) => ({
-        userId: item.user_id,
-        nickname: item.nickname,
-        teamId: item.team_id,
-        teamName: item.team_name,
-        totalScore: item.total_score || 0,
-        rank: item.rank,
-      }));
+      gripRankings = gripResult.data.map(
+        (item: {
+          user_id: string;
+          nickname: string;
+          team_id: string | null;
+          team_name: string | null;
+          total_score: number | null;
+          rank: number;
+        }) => ({
+          userId: item.user_id,
+          nickname: item.nickname,
+          teamId: item.team_id,
+          teamName: item.team_name,
+          totalScore: item.total_score || 0,
+          rank: item.rank,
+        }),
+      );
     }
 
     // 개인 랭킹 (Crux + Grip 합쳐서 정렬) - SQL 함수 결과를 합치기만 함
@@ -131,7 +200,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
         }));
 
       // 챌린지 랭킹 계산
-      const allTeamIds = teamsResult.data.map((team: any) => team.id);
+      const allTeamIds = teamsResult.data.map((team: Team) => team.id);
 
       // 챌린지 기록 조회
       const challengeRecordsResult = await executeSupabaseQuery(async () => {
@@ -144,9 +213,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       });
 
       // 팀별로 최고 기록 찾기
-      const teamChallengeMap = new Map<string, any>();
+      const teamChallengeMap = new Map<string, TeamChallengeData>();
       if (challengeRecordsResult.success && challengeRecordsResult.data) {
-        challengeRecordsResult.data.forEach((record: any) => {
+        challengeRecordsResult.data.forEach((record: ChallengeRecord) => {
           const teamId = record.team_id;
           if (!teamChallengeMap.has(teamId)) {
             teamChallengeMap.set(teamId, {
@@ -158,6 +227,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
           }
 
           const teamData = teamChallengeMap.get(teamId);
+          if (!teamData) {
+            // 이미 위에서 set했으므로 이 경우는 발생하지 않아야 하지만 타입 안전성을 위해 체크
+            return;
+          }
           // 실패 기록도 attempts에 포함
           teamData.attempts += 1;
           if (record.status === "failed") {
@@ -175,7 +248,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
       }
 
       // 모든 팀에 대해 챌린지 랭킹 생성
-      challengeRankings = teamsResult.data.map((team: any) => {
+      challengeRankings = teamsResult.data.map((team: Team) => {
         const teamData = teamChallengeMap.get(team.id);
         const attempts = teamData?.attempts || 0;
         const failures = teamData?.failures || 0;

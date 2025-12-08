@@ -7,7 +7,10 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
  * 파티 정보 조회 API
  * GET /api/party/[partyId]
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     // 1. 인증 확인
     const session = await getServerSession(authOptions);

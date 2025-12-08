@@ -13,7 +13,7 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
  * - canCreateParty: 파티 생성 가능 여부
  * - canManagePermissions: 권한 관리 가능 여부
  */
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   try {
     // 1. 인증 확인
     const session = await getServerSession(authOptions);

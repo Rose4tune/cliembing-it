@@ -31,7 +31,10 @@ interface BoardSnapshot {
  * 게임 세션 조회 API
  * GET /api/party/[partyId]/game-session?teamId=xxx
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -181,7 +184,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
  * 게임 세션 생성/업데이트 API
  * POST /api/party/[partyId]/game-session
  */
-export async function POST(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

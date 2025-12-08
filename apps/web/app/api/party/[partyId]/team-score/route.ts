@@ -6,7 +6,10 @@ import { successResponse, errorResponse, executeSupabaseQuery } from "@pkg/supab
  * 팀 점수 조회 API (테트리스 게임 점수 합산)
  * GET /api/party/[partyId]/team-score?teamId=xxx
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {

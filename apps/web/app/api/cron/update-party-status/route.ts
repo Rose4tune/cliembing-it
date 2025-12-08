@@ -12,7 +12,7 @@ import { executeSupabaseQuery } from "@pkg/supabase/api-helpers";
  *
  * 보안: 환경변수로 cron secret을 확인하여 인증
  */
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   try {
     // Cron secret 인증 (환경변수에서 확인)
     const authHeader = request.headers.get("authorization");

@@ -9,6 +9,36 @@ import {
 } from "@pkg/shared";
 import type { ClimbingLevel } from "@pkg/shared";
 
+// 타입 정의
+interface LevelScore {
+  user_id: string;
+  score: number;
+}
+
+interface User {
+  id: string;
+  nickname: string;
+  email: string | null;
+}
+
+interface PartyMember {
+  user_id: string;
+  team_id: string | null;
+}
+
+interface Team {
+  id: string;
+  name: string;
+}
+
+interface PersonalRanking {
+  userId: string;
+  nickname: string;
+  teamId: string | null;
+  teamName: string | null;
+  totalScore: number;
+}
+
 /**
  * 랭킹 계산 및 rankings 테이블 업데이트
  * @deprecated 이 함수는 더 이상 사용하지 않음 (워커가 처리)
@@ -24,19 +54,21 @@ async function _updateRankings(supabase: SupabaseClient, partyId: string) {
         .eq("approved", true);
     });
 
-    let personalRankings: any[] = [];
+    let personalRankings: PersonalRanking[] = [];
 
     if (personalScoresResult.success && personalScoresResult.data) {
-      const userIds = [...new Set(personalScoresResult.data.map((item: any) => item.user_id))];
+      const userIds = [
+        ...new Set(personalScoresResult.data.map((item: LevelScore) => item.user_id)),
+      ];
 
       if (userIds.length > 0) {
         const usersResult = await executeSupabaseQuery(async () => {
           return await supabase.from("users").select("id, nickname, email").in("id", userIds);
         });
 
-        const usersMap = new Map();
+        const usersMap = new Map<string, User>();
         if (usersResult.success && usersResult.data) {
-          usersResult.data.forEach((user: any) => {
+          usersResult.data.forEach((user: User) => {
             usersMap.set(user.id, user);
           });
         }
@@ -50,10 +82,10 @@ async function _updateRankings(supabase: SupabaseClient, partyId: string) {
             .in("user_id", userIds);
         });
 
-        const teamMap = new Map();
+        const teamMap = new Map<string, Team>();
         if (membersResult.success && membersResult.data) {
           const teamIds = membersResult.data
-            .map((m: any) => m.team_id)
+            .map((m: PartyMember) => m.team_id)
             .filter((id: string | null) => id !== null);
 
           if (teamIds.length > 0) {
@@ -62,13 +94,13 @@ async function _updateRankings(supabase: SupabaseClient, partyId: string) {
             });
 
             if (teamsResult.success && teamsResult.data) {
-              teamsResult.data.forEach((team: any) => {
+              teamsResult.data.forEach((team: Team) => {
                 teamMap.set(team.id, team);
               });
             }
           }
 
-          membersResult.data.forEach((member: any) => {
+          membersResult.data.forEach((member: PartyMember) => {
             if (member.team_id) {
               const team = teamMap.get(member.team_id);
               if (team) {
@@ -79,7 +111,7 @@ async function _updateRankings(supabase: SupabaseClient, partyId: string) {
         }
 
         const personalScores: Record<string, number> = {};
-        personalScoresResult.data.forEach((item: any) => {
+        personalScoresResult.data.forEach((item: LevelScore) => {
           const userId = item.user_id;
           personalScores[userId] = (personalScores[userId] || 0) + (item.score || 0);
         });
@@ -142,7 +174,10 @@ async function _updateRankings(supabase: SupabaseClient, partyId: string) {
  * 승인 대기 목록 조회 API (관리자용)
  * GET /api/admin/[partyId]/approvals
  */
-export async function GET(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
@@ -240,14 +275,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
 
     const gameRequests =
       gameRequestsResult.success && gameRequestsResult.data
-        ? gameRequestsResult.data.map((gs: any) => ({
-            id: gs.id,
-            team_id: gs.team_id,
-            team_name: gs.teams?.name || "알 수 없음",
-            status: gs.status,
-            // pending 상태일 때는 started_at이 null이므로, id를 기반으로 시간을 추정하거나 null 허용
-            requested_at: gs.started_at || gs.leader_confirmed_at || new Date().toISOString(), // null 방지
-          }))
+        ? gameRequestsResult.data.map((gs) => {
+            const team = Array.isArray(gs.teams) ? gs.teams[0] : gs.teams;
+            return {
+              id: gs.id,
+              team_id: gs.team_id,
+              team_name: team?.name || "알 수 없음",
+              status: gs.status,
+              // pending 상태일 때는 started_at이 null이므로, id를 기반으로 시간을 추정하거나 null 허용
+              requested_at: gs.started_at || gs.leader_confirmed_at || new Date().toISOString(), // null 방지
+            };
+          })
         : [];
 
     console.log("✅ 반환할 게임 요청:", gameRequests);
@@ -267,7 +305,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ part
  * 점수 승인 API (관리자용)
  * POST /api/admin/[partyId]/approvals
  */
-export async function POST(request: Request, { params }: { params: Promise<{ partyId: string }> }) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ partyId: string }> },
+): Promise<Response> {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
